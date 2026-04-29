@@ -32,7 +32,16 @@ func NewHTTPServer(ctx *bootstrap.Context, mysql *data.MySQLClients, registry *c
 		recordingsBase = "/var/spool/asterisk/monitor"
 	}
 
-	srv := kratosHttp.NewServer(kratosHttp.Address(addr))
+	// Timeout(0) disables Kratos's per-request context timeout (default
+	// 1s). Required for the SSE stream and the recording-download
+	// endpoint, both of which legitimately stay open for many minutes.
+	// Per-handler deadlines should still be added inline where they
+	// make sense (e.g. the recording handler uses a 10s DB lookup
+	// timeout before opening the file).
+	srv := kratosHttp.NewServer(
+		kratosHttp.Address(addr),
+		kratosHttp.Timeout(0),
+	)
 
 	route := srv.Route("/")
 
