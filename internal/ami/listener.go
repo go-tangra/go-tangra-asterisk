@@ -141,10 +141,12 @@ func (l *Listener) session(ctx context.Context) error {
 	// authtimeout (~30s) fires and closes the socket. We'd then see the
 	// banner read "succeed" with the EOF buffered, and the subsequent
 	// Login would go onto a half-closed socket — yielding "login: EOF".
+	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 	banner, err := r.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("read banner: %w", err)
 	}
+	_ = conn.SetReadDeadline(time.Time{})
 	l.log.Infof("AMI banner: %s", strings.TrimRight(banner, "\r\n"))
 
 	// Login — send bare credentials only. Some Asterisk builds drop the
