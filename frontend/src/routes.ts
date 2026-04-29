@@ -5,7 +5,7 @@ const routes: RouteRecordRaw[] = [
     path: '/asterisk',
     name: 'Asterisk',
     component: () => import('shell/app-layout'),
-    redirect: '/asterisk/calls',
+    redirect: '/asterisk/dashboards',
     meta: {
       order: 480,
       icon: 'lucide:phone',

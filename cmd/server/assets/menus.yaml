@@ -16,6 +16,18 @@ menus:
       - platform:admin
       - tenant:manager
 
+  - id: asterisk-dashboards
+    parent_id: asterisk
+    type: MENU
+    name: Dashboards
+    path: dashboards
+    component: app/asterisk/dashboards/index.vue
+    icon: lucide:activity
+    order: 1
+    authority:
+      - platform:admin
+      - tenant:manager
+
   - id: asterisk-calls
     parent_id: asterisk
     type: MENU
@@ -23,7 +35,7 @@ menus:
     path: calls
     component: app/asterisk/calls/index.vue
     icon: lucide:phone-call
-    order: 1
+    order: 2
     authority:
       - platform:admin
       - tenant:manager
@@ -35,7 +47,7 @@ menus:
     path: overview
     component: app/asterisk/overview/index.vue
     icon: lucide:bar-chart-3
-    order: 2
+    order: 3
     authority:
       - platform:admin
       - tenant:manager
@@ -47,18 +59,6 @@ menus:
     path: extensions
     component: app/asterisk/extensions/index.vue
     icon: lucide:users
-    order: 3
-    authority:
-      - platform:admin
-      - tenant:manager
-
-  - id: asterisk-dashboards
-    parent_id: asterisk
-    type: MENU
-    name: Dashboards
-    path: dashboards
-    component: app/asterisk/dashboards/index.vue
-    icon: lucide:activity
     order: 4
     authority:
       - platform:admin

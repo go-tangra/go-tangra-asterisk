@@ -78,6 +78,11 @@ const snapshot = ref<DashboardSnapshot>({
 });
 
 const callsSeries = ref<RangeSeries | null>(null);
+// Registered (available) extensions over time. We sum
+// asterisk_pjsip_endpoint_up filtered to kind="extension" so trunks don't
+// inflate the count — the exporter labels each endpoint by a
+// trunk/extension heuristic.
+const registeredExtensionsSeries = ref<RangeSeries | null>(null);
 
 let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -135,6 +140,7 @@ async function refresh(): Promise<void> {
       queueAbandoned,
       queueMembers,
       callsRange,
+      registeredExtensionsRange,
     ] = await Promise.all([
       instant('asterisk_up'),
       instant('asterisk_uptime_seconds'),
@@ -150,6 +156,7 @@ async function refresh(): Promise<void> {
       instant('asterisk_queue_abandoned_calls'),
       instant('asterisk_queue_members'),
       rangeQuery('asterisk_current_calls'),
+      rangeQuery('sum(asterisk_pjsip_endpoint_up{kind="extension"})'),
     ]);
 
     snapshot.value = {
@@ -168,6 +175,7 @@ async function refresh(): Promise<void> {
       queueMembers,
     };
     callsSeries.value = callsRange;
+    registeredExtensionsSeries.value = registeredExtensionsRange;
     lastUpdated.value = new Date();
   } finally {
     loading.value = false;
@@ -214,8 +222,7 @@ const upTag = computed(() => {
     : { color: '#FF4D4F', label: 'Down' };
 });
 
-const callsChartOption = computed(() => {
-  const series = callsSeries.value;
+function lineChartOption(series: RangeSeries | null, name: string, color?: string) {
   if (!series) return null;
   const points = series.timestamps.map((t, i) => [
     new Date(t).getTime(),
@@ -228,17 +235,26 @@ const callsChartOption = computed(() => {
     yAxis: { type: 'value', minInterval: 1 },
     series: [
       {
-        name: 'Active calls',
+        name,
         type: 'line',
         showSymbol: false,
         smooth: true,
         data: points,
-        areaStyle: { opacity: 0.15 },
-        lineStyle: { width: 2 },
+        areaStyle: { opacity: 0.15, color },
+        lineStyle: { width: 2, color },
+        itemStyle: color ? { color } : undefined,
       },
     ],
   };
-});
+}
+
+const callsChartOption = computed(() =>
+  lineChartOption(callsSeries.value, 'Active calls'),
+);
+
+const registeredExtensionsChartOption = computed(() =>
+  lineChartOption(registeredExtensionsSeries.value, 'Registered extensions', '#52C41A'),
+);
 
 // PJSIP endpoint table: collapse the labels into a row per (kind, state).
 interface EndpointRow {
@@ -392,15 +408,30 @@ const queueColumns = [
         </Col>
       </Row>
 
-      <Card title="Active calls (last 1h)" size="small" style="margin-bottom: 16px">
-        <VChart
-          v-if="callsChartOption"
-          :option="callsChartOption"
-          :autoresize="true"
-          style="height: 240px"
-        />
-        <Empty v-else description="No data" />
-      </Card>
+      <Row :gutter="16" style="margin-bottom: 16px">
+        <Col :span="12">
+          <Card title="Active calls (last 1h)" size="small">
+            <VChart
+              v-if="callsChartOption"
+              :option="callsChartOption"
+              :autoresize="true"
+              style="height: 240px"
+            />
+            <Empty v-else description="No data" />
+          </Card>
+        </Col>
+        <Col :span="12">
+          <Card title="Registered extensions (last 1h)" size="small">
+            <VChart
+              v-if="registeredExtensionsChartOption"
+              :option="registeredExtensionsChartOption"
+              :autoresize="true"
+              style="height: 240px"
+            />
+            <Empty v-else description="No data" />
+          </Card>
+        </Col>
+      </Row>
 
       <Row :gutter="16" style="margin-bottom: 16px">
         <Col :span="12">
