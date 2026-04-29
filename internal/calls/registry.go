@@ -271,6 +271,83 @@ func (r *Registry) ApplyNewstate(uniqueid, state, stateDesc string) {
 	}
 }
 
+// ApplyCallerID updates the CallerID fields. Inbound calls that land on
+// a ring group via an announcement only get a real CallerIDName once
+// the dialplan progresses past the Playback() — until then the field
+// is Asterisk's literal sentinel "<unknown>", which we normalise to
+// empty so the UI doesn't show "(<unknown>)" forever.
+func (r *Registry) ApplyCallerID(uniqueid, num, name string) {
+	r.mutateChannel(uniqueid, func(ch *Channel) {
+		if v := normaliseUnknown(num); v != "" {
+			ch.CallerIDNum = v
+		}
+		if v := normaliseUnknown(name); v != "" {
+			ch.CallerIDName = v
+		}
+	})
+}
+
+// ApplyConnectedLine updates the ConnectedLine fields. Same
+// normalisation as ApplyCallerID.
+func (r *Registry) ApplyConnectedLine(uniqueid, num, name string) {
+	r.mutateChannel(uniqueid, func(ch *Channel) {
+		if v := normaliseUnknown(num); v != "" {
+			ch.ConnectedLineNum = v
+		}
+		if v := normaliseUnknown(name); v != "" {
+			ch.ConnectedLineName = v
+		}
+	})
+}
+
+// ApplyExtension updates the Exten/Context fields. Fired by NewExten as
+// the channel walks the dialplan (from-trunk → app-announcement-X →
+// ext-group-X), giving the UI a more useful "to" value over time.
+func (r *Registry) ApplyExtension(uniqueid, exten, context string) {
+	r.mutateChannel(uniqueid, func(ch *Channel) {
+		if exten != "" {
+			ch.Exten = exten
+		}
+		if context != "" {
+			ch.Context = context
+		}
+	})
+}
+
+// mutateChannel runs fn under the write lock and emits a call.updated
+// event if the channel exists.
+func (r *Registry) mutateChannel(uniqueid string, fn func(*Channel)) {
+	if uniqueid == "" {
+		return
+	}
+	now := time.Now().UTC()
+	r.mu.Lock()
+	ch, ok := r.channels[uniqueid]
+	if !ok {
+		r.mu.Unlock()
+		return
+	}
+	fn(ch)
+	ch.UpdatedAt = now
+	call, _ := r.callLocked(ch.Linkedid)
+	r.mu.Unlock()
+	if call != nil {
+		r.publish(Event{Type: EventCallUpdated, Call: call, At: now})
+	}
+}
+
+// normaliseUnknown maps Asterisk's "no value" sentinels to "" so they
+// don't reach the UI. Asterisk reports unknown caller info as literal
+// "<unknown>" or "<no name>" / "<not provided>" depending on chan
+// driver and version.
+func normaliseUnknown(s string) string {
+	switch s {
+	case "", "<unknown>", "<no name>", "<not provided>":
+		return ""
+	}
+	return s
+}
+
 // ApplyBridgeEnter / ApplyBridgeLeave update bridge membership.
 func (r *Registry) ApplyBridgeEnter(uniqueid, bridgeID string) {
 	r.updateBridge(uniqueid, bridgeID)

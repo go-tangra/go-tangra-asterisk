@@ -499,26 +499,40 @@ onBeforeUnmount(() => {
   if (nowTimer) clearInterval(nowTimer);
 });
 
+// Asterisk's "no value" sentinels — sometimes leak through from older
+// chan drivers. Backend already strips these, but defend in depth.
+function clean(v: string | undefined): string {
+  if (!v) return '';
+  if (v === '<unknown>' || v === '<no name>' || v === '<not provided>') return '';
+  return v;
+}
+
 function callerOf(c: LiveCall): string {
   // Originating leg is channels[0] (sorted by createdAt asc in registry).
   const c0 = c.channels[0];
   if (!c0) return '—';
-  const num = c0.callerIdNum || c0.exten;
-  const name = c0.callerIdName;
-  return name && name !== num ? `${num} (${name})` : num || '—';
+  const num = clean(c0.callerIdNum) || clean(c0.exten);
+  const name = clean(c0.callerIdName);
+  if (!num && !name) return '—';
+  if (name && name !== num) return num ? `${num} (${name})` : name;
+  return num || '—';
 }
 
 function calleeOf(c: LiveCall): string {
-  // Best signal of the called party is connectedLineNum on the originating
-  // leg, or the second channel's callerIdNum (it's the answering leg).
+  // Preferred destination signals, in order:
+  //   1. connectedLineNum on the originating leg (set after a Dial())
+  //   2. callerIdNum on a later leg (the answering / dialed party)
+  //   3. exten on a later leg (ring group member being rung)
+  //   4. exten on the originating leg (announcement/IVR step before bridge)
   const c0 = c.channels[0];
-  const c1 = c.channels[1];
-  return (
-    (c0 && c0.connectedLineNum) ||
-    (c1 && c1.callerIdNum) ||
-    (c0 && c0.exten) ||
-    '—'
-  );
+  for (let i = 1; i < c.channels.length; i++) {
+    const ci = c.channels[i];
+    if (ci) {
+      const v = clean(ci.callerIdNum) || clean(ci.exten);
+      if (v) return v;
+    }
+  }
+  return clean(c0?.connectedLineNum) || clean(c0?.exten) || '—';
 }
 
 function callState(c: LiveCall): string {

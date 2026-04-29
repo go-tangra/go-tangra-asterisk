@@ -294,6 +294,39 @@ func (l *Listener) dispatch(ctx context.Context, msg *Message) {
 				msg.Get("ChannelStateDesc"),
 			)
 		}
+	case "NewCallerid":
+		// Inbound calls through ring-group + announcement workflows
+		// only get a real CallerIDName once the dialplan progresses
+		// past the Playback() — until then the field is "<unknown>".
+		if l.registry != nil {
+			l.registry.ApplyCallerID(
+				msg.Get("Uniqueid"),
+				msg.Get("CallerIDNum"),
+				msg.Get("CallerIDName"),
+			)
+		}
+	case "NewConnectedLine":
+		// ConnectedLine fills in once the call bridges to (or is
+		// being dialed toward) the destination — same shape as
+		// NewCallerid.
+		if l.registry != nil {
+			l.registry.ApplyConnectedLine(
+				msg.Get("Uniqueid"),
+				msg.Get("ConnectedLineNum"),
+				msg.Get("ConnectedLineName"),
+			)
+		}
+	case "NewExten":
+		// Channel walks the dialplan (from-trunk → app-announcement-X
+		// → ext-group-X). Tracking Exten/Context gives the UI a more
+		// useful "to" value for inbound calls before they bridge.
+		if l.registry != nil {
+			l.registry.ApplyExtension(
+				msg.Get("Uniqueid"),
+				msg.Get("Extension"),
+				msg.Get("Context"),
+			)
+		}
 	case "BridgeEnter":
 		if l.registry != nil {
 			l.registry.ApplyBridgeEnter(msg.Get("Uniqueid"), msg.Get("BridgeUniqueid"))
@@ -341,18 +374,26 @@ func awaitResponse(r *bufio.Reader, actionID string) error {
 // parseChannel maps an AMI Newchannel / CoreShowChannel event into our
 // channel model. CoreShowChannel uses the exact same field names as
 // Newchannel, so a single mapper covers both. Field names match AMI
-// header casing.
+// header casing. CallerID/ConnectedLine fields are stripped of
+// Asterisk's "<unknown>" sentinel so the UI doesn't render it.
 func parseChannel(m *Message) calls.Channel {
+	clean := func(s string) string {
+		switch s {
+		case "<unknown>", "<no name>", "<not provided>":
+			return ""
+		}
+		return s
+	}
 	return calls.Channel{
 		Uniqueid:          m.Get("Uniqueid"),
 		Linkedid:          m.Get("Linkedid"),
 		Channel:           m.Get("Channel"),
 		ChannelState:      m.Get("ChannelState"),
 		ChannelStateDesc:  m.Get("ChannelStateDesc"),
-		CallerIDNum:       m.Get("CallerIDNum"),
-		CallerIDName:      m.Get("CallerIDName"),
-		ConnectedLineNum:  m.Get("ConnectedLineNum"),
-		ConnectedLineName: m.Get("ConnectedLineName"),
+		CallerIDNum:       clean(m.Get("CallerIDNum")),
+		CallerIDName:      clean(m.Get("CallerIDName")),
+		ConnectedLineNum:  clean(m.Get("ConnectedLineNum")),
+		ConnectedLineName: clean(m.Get("ConnectedLineName")),
 		Exten:             m.Get("Exten"),
 		Context:           m.Get("Context"),
 		BridgeID:          m.Get("BridgeUniqueid"),
