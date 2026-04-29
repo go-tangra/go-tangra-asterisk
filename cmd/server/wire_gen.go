@@ -38,7 +38,7 @@ func initApp(context *bootstrap.Context) (*kratos.App, func(), error) {
 	pjsipRegRepo := data.NewPJSIPRegRepo(context, mySQLClients)
 	registrationService := service.NewRegistrationService(context, pjsipRegRepo)
 	grpcServer := server.NewGRPCServer(context, certManager, cdrService, statsService, registrationService)
-	httpServer := server.NewHTTPServer(context)
+	httpServer := server.NewHTTPServer(context, mySQLClients)
 	client, err := data.NewRegistrationClient(context)
 	if err != nil {
 		cleanup()

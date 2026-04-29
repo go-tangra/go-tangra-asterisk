@@ -4,7 +4,7 @@ import { ref, watch } from 'vue';
 import { useVbenDrawer } from 'shell/vben/common-ui';
 import { $t } from 'shell/locales';
 
-import { Descriptions, DescriptionsItem, Tag, Table, Tabs, TabPane, Spin, Empty } from 'ant-design-vue';
+import { Card, Descriptions, DescriptionsItem, Tag, Table, Tabs, TabPane, Spin, Empty } from 'ant-design-vue';
 
 import { useAsteriskCdrStore } from '../../stores/asterisk-cdr.state';
 import { useAsteriskRegistrationStore } from '../../stores/asterisk-registration.state';
@@ -44,6 +44,7 @@ const [Drawer, drawerApi] = useVbenDrawer({
     onlineAtCall.value = [];
     onlineLoaded.value = false;
     onlineError.value = '';
+    recordingError.value = '';
     try {
       const resp = await cdrStore.getCall(data.linkedid);
       summary.value = resp.summary;
@@ -177,6 +178,21 @@ const timelineColumns = [
   { title: 'data', dataIndex: 'appdata', key: 'appdata' },
 ];
 
+const recordingError = ref<string>('');
+
+// Recording is served by the asterisk module's HTTP server, exposed via
+// the platform's module-asset proxy at /modules/asterisk/recordings/...
+// Path-encoded so unusual linkedids don't break the URL. The auth cookie
+// is sent automatically by the browser.
+function recordingUrl(s: Call): string {
+  return `/modules/asterisk/recordings/${encodeURIComponent(s.linkedid)}`;
+}
+
+function onRecordingError() {
+  recordingError.value =
+    'Recording not available. Either the file is missing on disk or ASTERISK_RECORDINGS_PATH is not mounted.';
+}
+
 const onlineColumns = [
   { title: 'Extension', dataIndex: 'endpoint', key: 'endpoint', width: 120 },
   { title: 'Status', key: 'status', width: 130 },
@@ -239,6 +255,27 @@ const onlineColumns = [
           {{ summary.legCount }}
         </DescriptionsItem>
       </Descriptions>
+
+      <Card
+        v-if="summary && summary.recordingFile"
+        size="small"
+        style="margin-top: 16px"
+        title="Recording"
+      >
+        <audio
+          :src="recordingUrl(summary)"
+          controls
+          preload="metadata"
+          style="width: 100%"
+          @error="onRecordingError"
+        />
+        <div v-if="recordingError" style="color: #FF4D4F; font-size: 12px; margin-top: 6px">
+          {{ recordingError }}
+        </div>
+        <div style="font-size: 12px; color: #888; margin-top: 6px">
+          {{ summary.recordingFile }}
+        </div>
+      </Card>
 
       <Tabs v-if="summary" style="margin-top: 16px">
         <TabPane key="online" :tab="`Online at call time (${onlineAtCall.length})`">
