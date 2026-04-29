@@ -25,6 +25,12 @@ Environment=MODULE_REGISTRATION_SECRET=
 Environment=ASTERISK_CDR_DSN=
 Environment=ASTERISK_CONFIG_DSN=
 
+# Call recordings directory (FreePBX default: /var/spool/asterisk/monitor).
+# When set, the module exposes GET /recordings/{linkedid} and the call
+# drawer in the UI renders an inline audio player for any CDR row whose
+# recordingfile column is non-empty. Leave empty to disable the endpoint.
+Environment=ASTERISK_RECORDINGS_PATH=/var/spool/asterisk/monitor
+
 # mTLS server certs (gRPC server). Paths follow the cert-manager convention
 # under $CERTS_DIR (set in /etc/tangra-asterisk/env):
 #   {CERTS_DIR}/ca/ca.crt
