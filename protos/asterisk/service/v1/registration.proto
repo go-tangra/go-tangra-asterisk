@@ -1,0 +1,125 @@
+syntax = "proto3";
+
+package asterisk.service.v1;
+
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// AsteriskRegistrationService exposes the PJSIP registration event log
+// captured from the Asterisk Manager Interface (AMI). Unlike CDR data,
+// this comes from THIS module's own database — populated only when the
+// AMI listener is enabled.
+service AsteriskRegistrationService {
+  // Registration state of an extension at a point in time. When `at` is
+  // omitted, returns the current state.
+  rpc GetRegistrationStatus(GetRegistrationStatusRequest) returns (GetRegistrationStatusResponse) {
+    option (google.api.http) = {
+      get: "/v1/registration/status/{extension}"
+    };
+  }
+
+  // Audit log of registration events in a time range, filterable by
+  // extension. Newest first.
+  rpc ListRegistrationEvents(ListRegistrationEventsRequest) returns (ListRegistrationEventsResponse) {
+    option (google.api.http) = {
+      get: "/v1/registration/events"
+    };
+  }
+
+  // Snapshot of which extensions were registered (online) at a given
+  // instant. Useful for "who could have answered this call?" drilldowns.
+  rpc ListRegisteredAt(ListRegisteredAtRequest) returns (ListRegisteredAtResponse) {
+    option (google.api.http) = {
+      get: "/v1/registration/online"
+    };
+  }
+}
+
+// PJSIP ContactStatus values as emitted by Asterisk.
+enum RegStatus {
+  REG_STATUS_UNSPECIFIED = 0;
+  REG_STATUS_UNKNOWN = 1;
+  REG_STATUS_CREATED = 2;
+  REG_STATUS_UPDATED = 3;
+  REG_STATUS_REACHABLE = 4;
+  REG_STATUS_UNREACHABLE = 5;
+  REG_STATUS_REMOVED = 6;
+  REG_STATUS_UNQUALIFIED = 7;
+}
+
+message RegistrationEvent {
+  int64 id = 1;
+  google.protobuf.Timestamp event_time = 2;
+  string endpoint = 3;
+  string aor = 4;
+  string contact_uri = 5;
+  RegStatus status = 6;
+  string user_agent = 7;
+  string via_address = 8;
+
+  // Absolute time the registration expires. Zero when not derivable from
+  // the event (e.g. Removed / Unreachable).
+  google.protobuf.Timestamp reg_expire = 9;
+
+  // Last qualify round-trip time in microseconds.
+  int64 rtt_usec = 10;
+}
+
+message GetRegistrationStatusRequest {
+  string extension = 1 [(buf.validate.field).string.min_len = 1];
+
+  // Point in time to evaluate. When unset, treated as "now".
+  google.protobuf.Timestamp at = 2;
+}
+
+message GetRegistrationStatusResponse {
+  string extension = 1;
+
+  // Best-effort interpretation of the latest prior event:
+  // true when the device was reachable / registered at `at`.
+  bool registered = 2;
+
+  RegStatus status = 3;
+
+  // The event that drove the decision. Empty when no events exist for
+  // this extension at or before `at`.
+  RegistrationEvent last_event = 4;
+}
+
+message ListRegistrationEventsRequest {
+  google.protobuf.Timestamp from = 1 [(buf.validate.field).required = true];
+  google.protobuf.Timestamp to = 2 [(buf.validate.field).required = true];
+
+  // Optional substring filter on endpoint (extension number).
+  string extension = 3;
+
+  int32 page = 4 [(buf.validate.field).int32.gte = 0];
+  int32 page_size = 5 [(buf.validate.field).int32 = {gte: 0, lte: 200}];
+}
+
+message ListRegistrationEventsResponse {
+  repeated RegistrationEvent events = 1;
+  int32 total = 2;
+}
+
+message ListRegisteredAtRequest {
+  // Point in time to evaluate. When unset, treated as "now".
+  google.protobuf.Timestamp at = 1;
+}
+
+// One extension that was registered at the requested instant.
+message RegisteredEndpoint {
+  string endpoint = 1;
+  string contact_uri = 2;
+  string user_agent = 3;
+  string via_address = 4;
+  RegStatus status = 5;
+  google.protobuf.Timestamp last_event_time = 6;
+  google.protobuf.Timestamp reg_expire = 7;
+}
+
+message ListRegisteredAtResponse {
+  google.protobuf.Timestamp at = 1;
+  repeated RegisteredEndpoint endpoints = 2;
+}

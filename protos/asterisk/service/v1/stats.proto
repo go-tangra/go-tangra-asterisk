@@ -1,0 +1,210 @@
+syntax = "proto3";
+
+package asterisk.service.v1;
+
+import "asterisk/service/v1/cdr.proto";
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// AsteriskStatsService - aggregated CDR statistics.
+service AsteriskStatsService {
+  // Whole-fleet overview: totals, answer rate, average ring/talk times,
+  // and time-bucketed histograms for charts.
+  rpc Overview(OverviewRequest) returns (OverviewResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats/overview"
+    };
+  }
+
+  // One row per extension with rollups over the time range.
+  rpc ListExtensionStats(ListExtensionStatsRequest) returns (ListExtensionStatsResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats/extensions"
+    };
+  }
+
+  // Drilldown for a single extension over the time range.
+  rpc GetExtensionStats(GetExtensionStatsRequest) returns (GetExtensionStatsResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats/extensions/{extension}"
+    };
+  }
+
+  // Inbound traffic destined for a ringgroup (e.g. "600") split by outcome:
+  // answered by an operator, rang out without anyone picking up, or all
+  // operators were busy on other calls.
+  rpc RingGroupStats(RingGroupStatsRequest) returns (RingGroupStatsResponse) {
+    option (google.api.http) = {
+      get: "/v1/stats/ringgroups/{ring_group}"
+    };
+  }
+}
+
+// Granularity for time-bucketed series.
+enum TimeBucket {
+  TIME_BUCKET_UNSPECIFIED = 0;
+  TIME_BUCKET_HOUR = 1;
+  TIME_BUCKET_DAY = 2;
+  TIME_BUCKET_WEEK = 3;
+}
+
+message TimeBucketCount {
+  google.protobuf.Timestamp bucket_start = 1;
+  int32 total = 2;
+  int32 answered = 3;
+  int32 missed = 4;
+}
+
+message OverviewRequest {
+  google.protobuf.Timestamp from = 1 [(buf.validate.field).required = true];
+  google.protobuf.Timestamp to = 2 [(buf.validate.field).required = true];
+  TimeBucket bucket = 3;
+}
+
+message OverviewResponse {
+  // Number of distinct calls (linkedids) in range.
+  int32 total_calls = 1;
+  int32 answered_calls = 2;
+  int32 missed_calls = 3;
+  int32 busy_calls = 4;
+  int32 failed_calls = 5;
+
+  // Answer rate = answered / total, in [0,1].
+  double answer_rate = 6;
+
+  // Average pickup time across answered calls (CEL ANSWER - CHAN_START).
+  double avg_pickup_seconds = 7;
+
+  // Average talk time across answered calls (billsec on answered leg).
+  double avg_talk_seconds = 8;
+
+  // Optional histogram by time bucket.
+  repeated TimeBucketCount series = 9;
+}
+
+message ExtensionStat {
+  // Extension number (e.g. "45", "600").
+  string extension = 1;
+
+  // Display name from asterisk.users (best-effort, may be empty).
+  string display_name = 2;
+
+  int32 total_calls = 3;
+  int32 answered_calls = 4;
+  int32 missed_calls = 5;
+
+  // 0..1.
+  double miss_rate = 6;
+
+  // Seconds; 0 when no answered calls.
+  double avg_pickup_seconds = 7;
+  double avg_talk_seconds = 8;
+
+  // Hour-of-day (0-23) with the highest call count for this extension.
+  int32 busiest_hour = 9;
+
+  // Calls this extension answered as the inbound terminator
+  // (external caller -> trunk -> ringgroup/DID -> this ext picked up).
+  int32 inbound_calls = 10;
+
+  // Calls this extension originated and that left the PBX over a trunk.
+  int32 outbound_calls = 11;
+
+  // Total talk time across every call this extension was party to (sum of
+  // billsec on answered calls). Useful as a workload measure on its own
+  // and as a denominator for utilisation calculations.
+  int32 total_talk_seconds = 12;
+
+  // Fraction in [0, 1] of all external calls (inbound + outbound across
+  // every extension in the period) handled by this extension. Internal
+  // ext-to-ext calls are excluded so the shares of all extensions sum to 1.
+  double handled_share = 13;
+}
+
+message ListExtensionStatsRequest {
+  google.protobuf.Timestamp from = 1 [(buf.validate.field).required = true];
+  google.protobuf.Timestamp to = 2 [(buf.validate.field).required = true];
+
+  // Optional substring filter on extension number.
+  string extension = 3;
+
+  int32 page = 4 [(buf.validate.field).int32.gte = 0];
+  int32 page_size = 5 [(buf.validate.field).int32 = {gte: 0, lte: 200}];
+}
+
+message ListExtensionStatsResponse {
+  repeated ExtensionStat extensions = 1;
+  int32 total = 2;
+}
+
+message GetExtensionStatsRequest {
+  string extension = 1 [(buf.validate.field).string.min_len = 1];
+  google.protobuf.Timestamp from = 2 [(buf.validate.field).required = true];
+  google.protobuf.Timestamp to = 3 [(buf.validate.field).required = true];
+  TimeBucket bucket = 4;
+}
+
+message GetExtensionStatsResponse {
+  ExtensionStat summary = 1;
+
+  // Time-bucketed histogram for the extension.
+  repeated TimeBucketCount series = 2;
+
+  // Hour-of-day distribution (24 entries, hour 0..23).
+  repeated TimeBucketCount hour_of_day = 3;
+}
+
+message RingGroupStatsRequest {
+  // Ringgroup number, e.g. "600". Treated as a string because FreePBX
+  // ringgroups can technically be alphanumeric.
+  string ring_group = 1 [(buf.validate.field).string.min_len = 1];
+
+  google.protobuf.Timestamp from = 2 [(buf.validate.field).required = true];
+  google.protobuf.Timestamp to = 3 [(buf.validate.field).required = true];
+}
+
+// One inbound call to the ringgroup that was not answered by any operator.
+message MissedRingGroupCall {
+  string linkedid = 1;
+  google.protobuf.Timestamp calldate = 2;
+
+  // External caller id and number.
+  string src = 3;
+  string clid = 4;
+
+  // DID the caller dialed (the trunk-side number).
+  string did = 5;
+
+  // Final disposition. NO_ANSWER means the call rang out; BUSY typically
+  // means every member extension was already on a call; FAILED is a
+  // circuit-level failure.
+  Disposition disposition = 6;
+
+  // How long the call rang before being dropped (CHAN_START to call end on
+  // the parent leg). Zero if not derivable from CEL.
+  int32 ring_seconds = 7;
+}
+
+message RingGroupStatsResponse {
+  string ring_group = 1;
+
+  // Total inbound calls routed to this ringgroup in the period.
+  int32 total = 2;
+
+  // Calls where at least one member extension picked up.
+  int32 answered = 3;
+
+  // Calls that rang every member but nobody answered.
+  int32 no_answer = 4;
+
+  // Calls where every member was already on a call (busy signal).
+  int32 all_busy = 5;
+
+  // Calls that failed at the circuit level (no usable channel, congestion,
+  // etc.).
+  int32 failed = 6;
+
+  // Recent missed calls so the operator can identify and call back.
+  repeated MissedRingGroupCall missed_calls = 7;
+}

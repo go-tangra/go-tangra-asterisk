@@ -1,0 +1,13 @@
+# Tangra Asterisk Server Configuration
+# Place this file at /etc/tangra-asterisk/server.yaml
+
+server:
+  grpc:
+    addr: 0.0.0.0:9800
+    timeout: 30s
+    middleware:
+      enable_logging: true
+      enable_recovery: true
+      enable_tracing: false
+      enable_validate: true
+      enable_metadata: true

@@ -1,0 +1,82 @@
+# Asterisk Module Menu Definitions
+module:
+  id: asterisk
+  name: Asterisk
+  description: FreePBX call detail records and statistics
+
+menus:
+  - id: asterisk
+    parent_id: null
+    type: CATALOG
+    name: Asterisk
+    path: /asterisk
+    icon: lucide:phone
+    order: 480
+    authority:
+      - platform:admin
+      - tenant:manager
+
+  - id: asterisk-calls
+    parent_id: asterisk
+    type: MENU
+    name: Calls
+    path: calls
+    component: app/asterisk/calls/index.vue
+    icon: lucide:phone-call
+    order: 1
+    authority:
+      - platform:admin
+      - tenant:manager
+
+  - id: asterisk-overview
+    parent_id: asterisk
+    type: MENU
+    name: Overview
+    path: overview
+    component: app/asterisk/overview/index.vue
+    icon: lucide:bar-chart-3
+    order: 2
+    authority:
+      - platform:admin
+      - tenant:manager
+
+  - id: asterisk-extensions
+    parent_id: asterisk
+    type: MENU
+    name: Extensions
+    path: extensions
+    component: app/asterisk/extensions/index.vue
+    icon: lucide:users
+    order: 3
+    authority:
+      - platform:admin
+      - tenant:manager
+
+permission_groups:
+  - name: Asterisk
+    module: asterisk
+    description: Asterisk Module Permissions
+    permissions:
+      - name: View Calls
+        code: asterisk.cdr.view
+        description: View call detail records and drilldowns
+      - name: View Statistics
+        code: asterisk.stats.view
+        description: View call statistics and per-extension reports
+
+roles:
+  - name: Asterisk Administrator
+    code: asterisk.admin
+    description: Full access to Asterisk module
+    is_system: true
+    permissions:
+      - asterisk.cdr.view
+      - asterisk.stats.view
+
+  - name: Asterisk Viewer
+    code: asterisk.viewer
+    description: Read-only access to Asterisk module
+    is_system: true
+    permissions:
+      - asterisk.cdr.view
+      - asterisk.stats.view

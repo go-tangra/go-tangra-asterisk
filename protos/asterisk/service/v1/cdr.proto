@@ -1,0 +1,162 @@
+syntax = "proto3";
+
+package asterisk.service.v1;
+
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// AsteriskCdrService - read-only access to FreePBX call detail records.
+service AsteriskCdrService {
+  // List calls grouped by linkedid (one logical call per row),
+  // filterable by date range, src/dst pattern, extension, and disposition.
+  rpc ListCalls(ListCallsRequest) returns (ListCallsResponse) {
+    option (google.api.http) = {
+      get: "/v1/calls"
+    };
+  }
+
+  // Drilldown: all CDR legs for a linkedid plus the CEL event timeline.
+  rpc GetCall(GetCallRequest) returns (GetCallResponse) {
+    option (google.api.http) = {
+      get: "/v1/calls/{linkedid}"
+    };
+  }
+}
+
+// Disposition mirrors Asterisk dial result for the call.
+enum Disposition {
+  DISPOSITION_UNSPECIFIED = 0;
+  DISPOSITION_ANSWERED = 1;
+  DISPOSITION_NO_ANSWER = 2;
+  DISPOSITION_BUSY = 3;
+  DISPOSITION_FAILED = 4;
+}
+
+// One logical call (collapsed across all legs sharing a linkedid).
+message Call {
+  // FreePBX linkedid — stable id for the whole call across legs.
+  string linkedid = 1;
+
+  // First CDR row's calldate for this linkedid.
+  google.protobuf.Timestamp calldate = 2;
+
+  // Caller info.
+  string src = 3;
+  string clid = 4;
+  string cnum = 5;
+  string cnam = 6;
+
+  // Dialed destination (extension or pattern).
+  string dst = 7;
+
+  // Direction inferred from channel naming.
+  // "inbound" | "outbound" | "internal" | "unknown".
+  string direction = 8;
+
+  // Final disposition for the call (last leg's disposition wins,
+  // ANSWERED takes priority if any leg answered).
+  Disposition disposition = 9;
+
+  // Total wall-clock duration in seconds (max across legs).
+  int32 duration_seconds = 10;
+
+  // Talk time in seconds (billsec on the answered leg, 0 if unanswered).
+  int32 billsec_seconds = 11;
+
+  // Pickup latency in seconds: time from CHAN_START to ANSWER on the
+  // answered leg, or null if unanswered.
+  optional int32 pickup_seconds = 12;
+
+  // Extension that answered (parsed from PJSIP/<ext>-...), if any.
+  optional string answered_extension = 13;
+
+  // Did number for inbound (or empty).
+  string did = 14;
+
+  // Number of CDR legs comprising this call.
+  int32 leg_count = 15;
+
+  // Path to recording (relative or absolute), informational only — playback
+  // is not supported in v1.
+  string recording_file = 16;
+
+  // Extension that originated the call (parsed from PJSIP/<ext>-... on the
+  // first leg's channel). Set for outbound and internal calls; empty for
+  // inbound (where the first leg's channel is the trunk).
+  optional string originating_extension = 17;
+}
+
+message ListCallsRequest {
+  // Inclusive lower bound on calldate. Required.
+  google.protobuf.Timestamp from = 1 [(buf.validate.field).required = true];
+
+  // Exclusive upper bound on calldate. Required.
+  google.protobuf.Timestamp to = 2 [(buf.validate.field).required = true];
+
+  // Substring match against src (caller).
+  string src = 3;
+
+  // Substring match against dst (dialed).
+  string dst = 4;
+
+  // Filter by extension (parsed from channel/dstchannel).
+  string extension = 5;
+
+  // Filter by final disposition. Empty means all.
+  Disposition disposition = 6;
+
+  // Pagination.
+  int32 page = 7 [(buf.validate.field).int32.gte = 0];
+  int32 page_size = 8 [(buf.validate.field).int32 = {gte: 0, lte: 200}];
+
+  // Filter by inferred direction. One of "inbound", "outbound", "internal".
+  // Empty means all.
+  string direction = 9;
+}
+
+message ListCallsResponse {
+  repeated Call calls = 1;
+  int32 total = 2;
+}
+
+message GetCallRequest {
+  string linkedid = 1 [(buf.validate.field).string.min_len = 1];
+}
+
+// One CDR leg.
+message CallLeg {
+  string uniqueid = 1;
+  google.protobuf.Timestamp calldate = 2;
+  string channel = 3;
+  string dstchannel = 4;
+  string src = 5;
+  string dst = 6;
+  string lastapp = 7;
+  string lastdata = 8;
+  Disposition disposition = 9;
+  int32 duration_seconds = 10;
+  int32 billsec_seconds = 11;
+  optional string extension = 12;
+  string recording_file = 13;
+}
+
+// One CEL event in the call timeline.
+message CelEvent {
+  google.protobuf.Timestamp event_time = 1;
+  string eventtype = 2;
+  string channame = 3;
+  string uniqueid = 4;
+  string appname = 5;
+  string appdata = 6;
+  string cid_name = 7;
+  string cid_num = 8;
+  string exten = 9;
+  string context = 10;
+}
+
+message GetCallResponse {
+  Call summary = 1;
+  repeated CallLeg legs = 2;
+  repeated CelEvent timeline = 3;
+}

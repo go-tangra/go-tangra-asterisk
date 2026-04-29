@@ -1,0 +1,75 @@
+{
+  "menu": {
+    "asterisk": "Asterisk",
+    "calls": "Calls",
+    "overview": "Overview",
+    "extensions": "Extensions"
+  },
+  "page": {
+    "calls": {
+      "title": "Calls",
+      "from": "From",
+      "to": "To",
+      "src": "Caller",
+      "dst": "Destination",
+      "extension": "Extension",
+      "disposition": "Disposition",
+      "calldate": "Date",
+      "duration": "Duration",
+      "billsec": "Talk time",
+      "pickup": "Pickup",
+      "direction": "Direction",
+      "answeredExtension": "Answered by",
+      "legCount": "Legs",
+      "view": "View",
+      "drilldown": "Call detail",
+      "linkedid": "Linked ID",
+      "legs": "Legs",
+      "timeline": "Timeline",
+      "noPickup": "—"
+    },
+    "overview": {
+      "title": "Overview",
+      "totalCalls": "Total calls",
+      "answeredCalls": "Answered",
+      "missedCalls": "Missed",
+      "busyCalls": "Busy",
+      "failedCalls": "Failed",
+      "answerRate": "Answer rate",
+      "avgPickup": "Avg pickup",
+      "avgTalk": "Avg talk",
+      "series": "Calls over time"
+    },
+    "extensions": {
+      "title": "Extensions",
+      "extension": "Extension",
+      "displayName": "Name",
+      "totalCalls": "Total",
+      "inboundCalls": "Inbound",
+      "outboundCalls": "Outbound",
+      "answeredCalls": "Answered",
+      "missedCalls": "Missed",
+      "missRate": "Missed outbound %",
+      "totalTalk": "Total talk time",
+      "handledShare": "Workload share",
+      "avgPickup": "Avg pickup",
+      "avgTalk": "Avg talk",
+      "busiestHour": "Busiest hour",
+      "view": "View",
+      "tabs": {
+        "outbound": "Outbound",
+        "inbound": "Inbound",
+        "internal": "Internal",
+        "stats": "Stats"
+      },
+      "noCalls": "No calls in this period."
+    }
+  },
+  "disposition": {
+    "ANSWERED": "Answered",
+    "NO_ANSWER": "No answer",
+    "BUSY": "Busy",
+    "FAILED": "Failed",
+    "UNSPECIFIED": "—"
+  }
+}

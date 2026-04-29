@@ -1,0 +1,58 @@
+name: tangra-asterisk
+arch: ${ARCH}
+version: ${VERSION}
+maintainer: Go Tangra <support@go-tangra.dev>
+description: Tangra Asterisk Service - Read-only CDR viewer for FreePBX
+homepage: https://github.com/go-tangra/go-tangra-asterisk
+license: MIT
+vendor: Go Tangra
+
+contents:
+  # Binary
+  - src: dist/tangra-asterisk
+    dst: /usr/local/bin/tangra-asterisk
+    file_info:
+      mode: 0755
+
+  # Systemd service
+  - src: deploy/tangra-asterisk.service
+    dst: /etc/systemd/system/tangra-asterisk.service
+    file_info:
+      mode: 0644
+
+  # Config files (only if not already present)
+  - src: deploy/server.yaml
+    dst: /etc/tangra-asterisk/server.yaml
+    type: config|noreplace
+    file_info:
+      mode: 0600
+
+  - src: deploy/logger.yaml
+    dst: /etc/tangra-asterisk/logger.yaml
+    type: config|noreplace
+    file_info:
+      mode: 0600
+
+  - src: deploy/data.yaml
+    dst: /etc/tangra-asterisk/data.yaml
+    type: config|noreplace
+    file_info:
+      mode: 0600
+
+  # Create directories
+  - dst: /etc/tangra-asterisk/certs
+    type: dir
+    file_info:
+      mode: 0700
+
+scripts:
+  postinstall: deploy/scripts/postinstall.sh
+  preremove: deploy/scripts/preremove.sh
+
+overrides:
+  deb:
+    depends:
+      - systemd
+  rpm:
+    depends:
+      - systemd

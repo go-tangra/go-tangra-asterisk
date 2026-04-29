@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package asterisk.service.v1;
+
+import "errors/errors.proto";
+
+enum AsteriskErrorReason {
+  option (errors.default_code) = 500;
+
+  ASTERISK_ERROR_UNSPECIFIED = 0 [(errors.code) = 500];
+  CALL_NOT_FOUND = 1 [(errors.code) = 404];
+  EXTENSION_NOT_FOUND = 2 [(errors.code) = 404];
+  INVALID_TIME_RANGE = 3 [(errors.code) = 400];
+  MYSQL_UNAVAILABLE = 4 [(errors.code) = 503];
+}

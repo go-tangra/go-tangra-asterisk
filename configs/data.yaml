@@ -1,0 +1,51 @@
+# MySQL connections.
+#
+#   cdr_dsn / config_dsn  — FreePBX databases (read-only). Required.
+#   tangra_dsn            — DB this module OWNS, holding the PJSIP
+#                           registration event log captured from AMI.
+#                           Optional: leave blank to disable the feature.
+#                           The schema (pjsip_registration_events table)
+#                           is created automatically on startup.
+#
+# Each value can be overridden by env vars:
+#   ASTERISK_CDR_DSN, ASTERISK_CONFIG_DSN, ASTERISK_TANGRA_DSN
+#   ASTERISK_AMI_HOST, ASTERISK_AMI_PORT,
+#   ASTERISK_AMI_USERNAME, ASTERISK_AMI_SECRET
+data:
+  asterisk:
+    # DSN to the FreePBX server. The same MySQL host hosts both databases —
+    # we open one *sql.DB per logical database. parseTime=true is required
+    # for datetime decoding; loc=UTC keeps timestamps consistent.
+    cdr_dsn: "root:*Abcd123456@tcp(percona:3306)/asteriskcdrdb?parseTime=true&loc=UTC"
+    config_dsn: "root:*Abcd123456@tcp(percona:3306)/asterisk?parseTime=true&loc=UTC"
+    # The DB itself must already exist (CREATE DATABASE tangra_asterisk;).
+    # The table inside it is auto-created.
+    tangra_dsn: "root:*Abcd123456@tcp(percona:3306)/tangra_asterisk?parseTime=true&loc=UTC"
+    max_open_conns: 25
+    max_idle_conns: 5
+    conn_max_lifetime: 30m
+    query_timeout: 30s
+
+    # AMI listener. Subscribes to ContactStatus events to track each
+    # extension's registration state over time. Leave `host` blank to
+    # disable the listener entirely (the gRPC endpoints will still respond
+    # but with AMI_DISABLED → 503).
+    #
+    # Required on the Asterisk box — /etc/asterisk/manager.conf:
+    #   [tangra]
+    #   secret = <strong-secret>
+    #   deny = 0.0.0.0/0
+    #   permit = <tangra-asterisk-network>
+    #   read = system
+    #   write =
+    #
+    # And in /etc/asterisk/pjsip.conf [global] (recommended — without it
+    # only Created/Removed/Reachable/Unreachable fire, refresh
+    # registrations don't):
+    #   send_contact_status_on_update_registration = yes
+    ami:
+      host: ""              # e.g. "freepbx" or "10.0.0.5"
+      port: 5038
+      username: "tangra"
+      secret: ""
+      reconnect_delay: 5s

@@ -1,0 +1,7 @@
+# Tangra Asterisk Logger Configuration
+# Place this file at /etc/tangra-asterisk/logger.yaml
+
+logger:
+  level: info
+  output: stdout
+  format: json
