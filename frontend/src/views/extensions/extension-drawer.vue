@@ -237,6 +237,26 @@ function destinationDisplay(row: Call): string {
   return row.dst;
 }
 
+// Recording playback. The asterisk module's HTTP server exposes
+// /recordings/{linkedid}; the admin gateway proxies it under
+// /modules/asterisk so the auth cookie is forwarded automatically.
+//
+// The parameter is typed loosely because Ant Design Vue's table slots
+// surface rows as Record<string, any>; a stricter type wouldn't satisfy
+// the :row-expandable callback signature.
+interface CallRow {
+  linkedid?: string;
+  recordingFile?: string;
+}
+
+function recordingUrl(c: CallRow): string {
+  return `/modules/asterisk/recordings/${encodeURIComponent(c.linkedid ?? '')}`;
+}
+
+function hasRecording(c: CallRow): boolean {
+  return Boolean(c.recordingFile && c.recordingFile.length > 0);
+}
+
 // Hour-of-day buckets are emitted in UTC; convert to Sofia so 09:00 reads
 // as the operator's local hour.
 function bucketHour(iso: string): number {
@@ -260,6 +280,10 @@ const callColumns = [
   { title: $t('asterisk.page.calls.billsec'), key: 'billsec', width: 100 },
   { title: $t('asterisk.page.calls.pickup'), key: 'pickup', width: 90 },
 ];
+
+// Rows with a recording show an expand chevron that reveals the audio
+// player; rows without a recording have no chevron and can't be expanded.
+const recordingExpandable = (record: CallRow): boolean => hasRecording(record);
 
 const seriesColumns = [
   { title: 'Bucket', dataIndex: 'bucketStart', key: 'bucketStart', width: 200 },
@@ -381,6 +405,7 @@ const regColumns = [
             :columns="callColumns"
             :data-source="calls.outbound.map((c, i) => ({ ...c, key: c.linkedid || i }))"
             :pagination="{ pageSize: 20, showSizeChanger: false }"
+            :row-expandable="recordingExpandable"
             size="small"
           >
             <template #bodyCell="{ column, record }">
@@ -395,6 +420,12 @@ const regColumns = [
               <template v-else-if="column.key === 'pickup'">
                 {{ record.pickupSeconds == null ? $t('asterisk.page.calls.noPickup') : `${record.pickupSeconds}s` }}
               </template>
+            </template>
+            <template #expandedRowRender="{ record }">
+              <div v-if="hasRecording(record)" style="padding: 4px 8px">
+                <audio :src="recordingUrl(record)" controls preload="none" style="width: 100%; max-width: 480px" />
+                <div style="font-size: 12px; color: #888; margin-top: 4px">{{ record.recordingFile }}</div>
+              </div>
             </template>
           </Table>
           <Empty v-else-if="loaded.outbound" :description="$t('asterisk.page.extensions.noCalls')" />
@@ -408,6 +439,7 @@ const regColumns = [
             :columns="callColumns"
             :data-source="calls.inbound.map((c, i) => ({ ...c, key: c.linkedid || i }))"
             :pagination="{ pageSize: 20, showSizeChanger: false }"
+            :row-expandable="recordingExpandable"
             size="small"
           >
             <template #bodyCell="{ column, record }">
@@ -423,6 +455,12 @@ const regColumns = [
                 {{ record.pickupSeconds == null ? $t('asterisk.page.calls.noPickup') : `${record.pickupSeconds}s` }}
               </template>
             </template>
+            <template #expandedRowRender="{ record }">
+              <div v-if="hasRecording(record)" style="padding: 4px 8px">
+                <audio :src="recordingUrl(record)" controls preload="none" style="width: 100%; max-width: 480px" />
+                <div style="font-size: 12px; color: #888; margin-top: 4px">{{ record.recordingFile }}</div>
+              </div>
+            </template>
           </Table>
           <Empty v-else-if="loaded.inbound" :description="$t('asterisk.page.extensions.noCalls')" />
         </Spin>
@@ -435,6 +473,7 @@ const regColumns = [
             :columns="callColumns"
             :data-source="calls.internal.map((c, i) => ({ ...c, key: c.linkedid || i }))"
             :pagination="{ pageSize: 20, showSizeChanger: false }"
+            :row-expandable="recordingExpandable"
             size="small"
           >
             <template #bodyCell="{ column, record }">
@@ -449,6 +488,12 @@ const regColumns = [
               <template v-else-if="column.key === 'pickup'">
                 {{ record.pickupSeconds == null ? $t('asterisk.page.calls.noPickup') : `${record.pickupSeconds}s` }}
               </template>
+            </template>
+            <template #expandedRowRender="{ record }">
+              <div v-if="hasRecording(record)" style="padding: 4px 8px">
+                <audio :src="recordingUrl(record)" controls preload="none" style="width: 100%; max-width: 480px" />
+                <div style="font-size: 12px; color: #888; margin-top: 4px">{{ record.recordingFile }}</div>
+              </div>
             </template>
           </Table>
           <Empty v-else-if="loaded.internal" :description="$t('asterisk.page.extensions.noCalls')" />
