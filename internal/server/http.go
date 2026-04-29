@@ -41,8 +41,14 @@ func NewHTTPServer(ctx *bootstrap.Context, mysql *data.MySQLClients, registry *c
 	l.Infof("Recording endpoint enabled: base=%s", recordingsBase)
 
 	if registry != nil {
+		// Register via HandlePrefix instead of route.GET so the SSE
+		// handler bypasses Kratos's request-timeout middleware (default
+		// 1s, which would kill the stream before any keepalive fires).
+		// Auth is enforced upstream by admin-service before the gateway
+		// proxies the request — the module's HTTP server has no auth
+		// of its own.
 		streamHandler := NewCallStreamHandler(l, registry)
-		route.GET("/calls/stream", streamHandler.Serve)
+		srv.HandlePrefix("/calls/stream", streamHandler)
 		l.Info("Live call SSE stream enabled at /calls/stream")
 	}
 

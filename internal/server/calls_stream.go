@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
-	kratosHttp "github.com/go-kratos/kratos/v2/transport/http"
 
 	"github.com/go-tangra/go-tangra-asterisk/internal/calls"
 )
@@ -21,6 +20,13 @@ import (
 // reverse proxy. Go's httputil.ReverseProxy auto-detects
 // text/event-stream and switches to streaming-flush mode (Go 1.19+),
 // so no proxy-side change is required.
+//
+// IMPORTANT: implements http.Handler directly (not the Kratos Context
+// signature) so it can be registered via srv.HandlePrefix, which
+// bypasses Kratos's middleware chain. The Kratos HTTP server has a
+// default 1-second request timeout that would otherwise kill the
+// stream before the first keepalive fires. Auth is still enforced
+// upstream by admin-service before the gateway proxies the request.
 type CallStreamHandler struct {
 	log      *log.Helper
 	registry *calls.Registry
@@ -30,61 +36,60 @@ func NewCallStreamHandler(l *log.Helper, registry *calls.Registry) *CallStreamHa
 	return &CallStreamHandler{log: l, registry: registry}
 }
 
-// Serve handles GET /calls/stream. Returns 503 when the registry isn't
-// configured (AMI not enabled).
-func (h *CallStreamHandler) Serve(c kratosHttp.Context) error {
+// ServeHTTP implements http.Handler.
+func (h *CallStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.registry == nil {
-		return writeError(c, http.StatusServiceUnavailable, "AMI_DISABLED",
-			"live call stream requires AMI to be configured")
+		http.Error(w, `{"code":503,"reason":"AMI_DISABLED","message":"live call stream requires AMI to be configured"}`, http.StatusServiceUnavailable)
+		return
 	}
-	w := c.Response()
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		return writeError(c, http.StatusInternalServerError, "STREAMING_UNSUPPORTED",
-			"underlying response writer does not support streaming")
+		http.Error(w, `{"code":500,"reason":"STREAMING_UNSUPPORTED","message":"response writer does not support streaming"}`, http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache, no-store, no-transform")
 	w.Header().Set("Connection", "keep-alive")
+	// X-Accel-Buffering disables nginx response buffering for this
+	// stream; harmless if no nginx is in front.
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
 
-	// Initial snapshot frame so the client doesn't need a separate
-	// REST round-trip before the first event arrives.
+	// Initial snapshot frame so the client doesn't need a separate REST
+	// round-trip before the first event arrives.
 	snap := h.registry.Snapshot()
 	if err := writeEvent(w, "snapshot", snap); err != nil {
-		return nil // client gone before first write
+		return // client gone before first write
 	}
 	flusher.Flush()
 
 	id, ch := h.registry.Subscribe()
 	defer h.registry.Unsubscribe(id)
 
-	// Periodic comment line as a keepalive — proxies and Vite dev
-	// servers love to close idle text/event-stream connections after
-	// 30-60s of silence.
+	// Periodic comment as a keepalive — many reverse proxies close
+	// idle text/event-stream connections after 30–60s of silence.
 	keepalive := time.NewTicker(20 * time.Second)
 	defer keepalive.Stop()
 
-	ctx := c.Request().Context()
+	ctx := r.Context()
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return
 		case <-keepalive.C:
 			if _, err := fmt.Fprint(w, ": keepalive\n\n"); err != nil {
-				return nil
+				return
 			}
 			flusher.Flush()
 		case ev, ok := <-ch:
 			if !ok {
-				// Subscriber dropped (slow consumer). Tear down so
-				// the browser EventSource reconnects fresh.
-				return nil
+				// Subscriber dropped (slow consumer). Tear down so the
+				// browser EventSource reconnects fresh.
+				return
 			}
 			if err := writeEvent(w, string(ev.Type), ev); err != nil {
-				return nil
+				return
 			}
 			flusher.Flush()
 		}
