@@ -762,9 +762,9 @@ func (r *StatsRepo) RingGroupStats(ctx context.Context, f RingGroupStatsFilter) 
 			SELECT
 				c.linkedid,
 				MIN(c.calldate)        AS first_calldate,
-				ANY_VALUE(c.src)       AS src,
-				ANY_VALUE(c.clid)      AS clid,
-				ANY_VALUE(c.did)       AS did,
+				MAX(c.src)             AS src,
+				MAX(c.clid)            AS clid,
+				MAX(c.did)             AS did,
 				MAX(c.duration)        AS ring_seconds,
 				CASE
 					WHEN SUM(c.disposition='ANSWERED')  > 0 THEN 'ANSWERED'

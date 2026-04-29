@@ -25,10 +25,12 @@ Environment=MODULE_REGISTRATION_SECRET=
 Environment=ASTERISK_CDR_DSN=
 Environment=ASTERISK_CONFIG_DSN=
 
-# mTLS server certs (gRPC server)
-Environment=ASTERISK_CA_CERT_PATH=/etc/tangra-asterisk/certs/ca.crt
-Environment=ASTERISK_SERVER_CERT_PATH=/etc/tangra-asterisk/certs/server.crt
-Environment=ASTERISK_SERVER_KEY_PATH=/etc/tangra-asterisk/certs/server.key
+# mTLS server certs (gRPC server). Paths follow the cert-manager convention
+# under $CERTS_DIR (set in /etc/tangra-asterisk/env):
+#   {CERTS_DIR}/ca/ca.crt
+#   {CERTS_DIR}/asterisk-server/server.{crt,key}
+# Override with ASTERISK_CA_CERT_PATH / ASTERISK_SERVER_CERT_PATH /
+# ASTERISK_SERVER_KEY_PATH in /etc/tangra-asterisk/env if needed.
 
 # Security hardening
 NoNewPrivileges=true

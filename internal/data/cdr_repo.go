@@ -67,15 +67,22 @@ func (r *CdrRepo) ListCalls(ctx context.Context, f CallFilter) ([]CallSummary, i
 	}
 	offset := page * pageSize
 
+	// Note on aggregation: we use MAX() instead of ANY_VALUE() for the
+	// per-leg columns we just want one representative value of. ANY_VALUE
+	// is a MySQL 5.7+ built-in to suppress ONLY_FULL_GROUP_BY, but FreePBX's
+	// MariaDB does not have it as a built-in — it tries to resolve as a
+	// stored routine and errors out with 1370 ("execute command denied for
+	// routine ANY_VALUE"). MAX() is portable across MySQL/MariaDB and on
+	// strings yields a deterministic representative value.
 	listSQL := `
 		SELECT
 			c.linkedid,
 			MIN(c.calldate)                                                             AS first_calldate,
-			ANY_VALUE(c.src)                                                            AS src,
-			ANY_VALUE(c.clid)                                                           AS clid,
-			ANY_VALUE(c.cnum)                                                           AS cnum,
-			ANY_VALUE(c.cnam)                                                           AS cnam,
-			ANY_VALUE(c.dst)                                                            AS dst,
+			MAX(c.src)                                                                  AS src,
+			MAX(c.clid)                                                                 AS clid,
+			MAX(c.cnum)                                                                 AS cnum,
+			MAX(c.cnam)                                                                 AS cnam,
+			MAX(c.dst)                                                                  AS dst,
 			MAX(c.duration)                                                             AS duration,
 			MAX(CASE WHEN c.disposition='ANSWERED' THEN c.billsec ELSE 0 END)           AS billsec,
 			CASE
@@ -85,8 +92,8 @@ func (r *CdrRepo) ListCalls(ctx context.Context, f CallFilter) ([]CallSummary, i
 				ELSE 'NO ANSWER'
 			END                                                                         AS final_disposition,
 			COUNT(*)                                                                    AS leg_count,
-			ANY_VALUE(c.did)                                                            AS did,
-			ANY_VALUE(c.recordingfile)                                                  AS recordingfile,
+			MAX(c.did)                                                                  AS did,
+			MAX(c.recordingfile)                                                        AS recordingfile,
 			MAX(CASE WHEN c.disposition='ANSWERED' THEN c.dstchannel END)               AS answered_dstchannel,
 			MAX(CASE WHEN c.disposition='ANSWERED' THEN c.channel END)                  AS answered_channel,
 			(SELECT fl.channel    FROM cdr fl WHERE fl.linkedid = c.linkedid
