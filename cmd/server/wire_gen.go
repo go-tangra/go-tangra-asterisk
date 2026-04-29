@@ -39,14 +39,16 @@ func initApp(context *bootstrap.Context) (*kratos.App, func(), error) {
 	registrationService := service.NewRegistrationService(context, pjsipRegRepo)
 	prometheusClient := data.NewPrometheusClient(config)
 	dashboardService := service.NewDashboardService(context, prometheusClient)
-	grpcServer := server.NewGRPCServer(context, certManager, cdrService, statsService, registrationService, dashboardService)
-	httpServer := server.NewHTTPServer(context, mySQLClients)
+	callRegistry := providers.NewCallRegistry()
+	liveCallsService := service.NewLiveCallsService(context, callRegistry)
+	grpcServer := server.NewGRPCServer(context, certManager, cdrService, statsService, registrationService, dashboardService, liveCallsService)
+	httpServer := server.NewHTTPServer(context, mySQLClients, callRegistry)
 	client, err := data.NewRegistrationClient(context)
 	if err != nil {
 		cleanup()
 		return nil, nil, err
 	}
-	listener := providers.NewAMIListener(context, config, pjsipRegRepo)
+	listener := providers.NewAMIListener(context, config, pjsipRegRepo, callRegistry)
 	app := newApp(context, grpcServer, httpServer, client, listener)
 	return app, func() {
 		cleanup()

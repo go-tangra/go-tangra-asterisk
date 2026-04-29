@@ -14,6 +14,7 @@ import (
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/tx7do/kratos-bootstrap/bootstrap"
 
+	"github.com/go-tangra/go-tangra-asterisk/internal/calls"
 	"github.com/go-tangra/go-tangra-asterisk/internal/data"
 )
 
@@ -37,10 +38,11 @@ type EventSink interface {
 // Listener owns the AMI connection, runs the event loop, and writes
 // ContactStatus events to the sink.
 type Listener struct {
-	log     *log.Helper
-	cfg     Config
-	sink    EventSink
-	running atomic.Bool
+	log      *log.Helper
+	cfg      Config
+	sink     EventSink
+	registry *calls.Registry
+	running  atomic.Bool
 
 	mu      sync.Mutex
 	conn    net.Conn
@@ -56,18 +58,26 @@ func (l *Listener) sendAction(w net.Conn, headers [][2]string) error {
 }
 
 // NewListener constructs a listener. Run starts the loop; Run is a no-op
-// when AMI is disabled (host or sink missing).
-func NewListener(ctx *bootstrap.Context, cfg Config, sink EventSink) *Listener {
+// when AMI is disabled (host missing). Either sink (PJSIP registration
+// log) or registry (live call tracking) being present is enough to run.
+func NewListener(ctx *bootstrap.Context, cfg Config, sink EventSink, registry *calls.Registry) *Listener {
 	return &Listener{
-		log:  ctx.NewLoggerHelper("asterisk/ami"),
-		cfg:  cfg,
-		sink: sink,
+		log:      ctx.NewLoggerHelper("asterisk/ami"),
+		cfg:      cfg,
+		sink:     sink,
+		registry: registry,
 	}
 }
 
-// Enabled reports whether the listener is configured to start.
+// Enabled reports whether the listener is configured to start. Needs a
+// host plus at least one consumer (sink or registry) for AMI events.
 func (l *Listener) Enabled() bool {
-	return l.cfg.Host != "" && l.sink != nil && l.sink.Enabled()
+	if l.cfg.Host == "" {
+		return false
+	}
+	hasSink := l.sink != nil && l.sink.Enabled()
+	hasRegistry := l.registry != nil
+	return hasSink || hasRegistry
 }
 
 // Run blocks until ctx is cancelled. It reconnects on errors with the
@@ -230,35 +240,72 @@ func (l *Listener) pinger(ctx context.Context, conn net.Conn) {
 	}
 }
 
-// reconcile asks Asterisk for the current contact list and synthesises an
-// event per contact so a "registered now" snapshot lands in the log even if
-// no live ContactStatus event fired during connect.
+// reconcile asks Asterisk for the current contact list AND the current
+// channel list so the registry has a coherent snapshot from the moment
+// the listener comes up — without this, calls in progress at connect
+// time would never appear until the next state change.
 func (l *Listener) reconcile(w net.Conn) error {
-	// PJSIPShowContacts returns ContactList events followed by
-	// ContactListComplete. Because the read loop is the single consumer of
-	// the connection, we can't pull events here ourselves — instead we just
-	// trigger the action and let dispatch() handle ContactList rows as
-	// regular events (treating them like ContactStatus with status=Reachable).
-	return l.sendAction(w, [][2]string{
-		{"Action", "PJSIPShowContacts"},
-		{"ActionID", "reconcile-1"},
-	})
+	if l.registry != nil {
+		// Drop any stale state from a previous (dropped) session before
+		// CoreShowChannels reseeds it.
+		l.registry.Reset()
+		if err := l.sendAction(w, [][2]string{
+			{"Action", "CoreShowChannels"},
+			{"ActionID", "reconcile-channels"},
+		}); err != nil {
+			return fmt.Errorf("CoreShowChannels: %w", err)
+		}
+	}
+	if l.sink != nil && l.sink.Enabled() {
+		if err := l.sendAction(w, [][2]string{
+			{"Action", "PJSIPShowContacts"},
+			{"ActionID", "reconcile-contacts"},
+		}); err != nil {
+			return fmt.Errorf("PJSIPShowContacts: %w", err)
+		}
+	}
+	return nil
 }
 
-// dispatch routes a single AMI message. We persist ContactStatus events
-// directly, and treat ContactList (response to PJSIPShowContacts) as
-// reconcile-time snapshots.
+// dispatch routes a single AMI message to the right consumer.
+//
+// Registration tracking: ContactStatus + ContactList → sink.
+// Live call tracking: Newchannel/Newstate/BridgeEnter/Leave/Hangup/
+// CoreShowChannel (reconcile reply) → registry.
 func (l *Listener) dispatch(ctx context.Context, msg *Message) {
 	t := msg.Type()
-	if t != "" {
-		l.log.Infof("AMI frame: type=%s endpoint=%s status=%s aor=%s", t,
-			msg.Get("EndpointName"), msg.Get("ContactStatus"), msg.Get("AOR"))
-	}
 	switch t {
 	case "ContactStatus":
 		l.persist(ctx, parseContactStatus(msg))
 	case "ContactList":
 		l.persist(ctx, parseContactList(msg))
+	case "Newchannel", "CoreShowChannel":
+		// CoreShowChannel is the reconcile reply — same shape as
+		// Newchannel. Treating them identically keeps the registry
+		// model simple.
+		if l.registry != nil {
+			l.registry.ApplyNewchannel(parseChannel(msg))
+		}
+	case "Newstate":
+		if l.registry != nil {
+			l.registry.ApplyNewstate(
+				msg.Get("Uniqueid"),
+				msg.Get("ChannelState"),
+				msg.Get("ChannelStateDesc"),
+			)
+		}
+	case "BridgeEnter":
+		if l.registry != nil {
+			l.registry.ApplyBridgeEnter(msg.Get("Uniqueid"), msg.Get("BridgeUniqueid"))
+		}
+	case "BridgeLeave":
+		if l.registry != nil {
+			l.registry.ApplyBridgeLeave(msg.Get("Uniqueid"))
+		}
+	case "Hangup":
+		if l.registry != nil {
+			l.registry.ApplyHangup(msg.Get("Uniqueid"))
+		}
 	}
 }
 
@@ -289,6 +336,27 @@ func awaitResponse(r *bufio.Reader, actionID string) error {
 		return fmt.Errorf("response: %s — %s", msg.Get("Response"), msg.Get("Message"))
 	}
 	return fmt.Errorf("no response for ActionID=%s", actionID)
+}
+
+// parseChannel maps an AMI Newchannel / CoreShowChannel event into our
+// channel model. CoreShowChannel uses the exact same field names as
+// Newchannel, so a single mapper covers both. Field names match AMI
+// header casing.
+func parseChannel(m *Message) calls.Channel {
+	return calls.Channel{
+		Uniqueid:          m.Get("Uniqueid"),
+		Linkedid:          m.Get("Linkedid"),
+		Channel:           m.Get("Channel"),
+		ChannelState:      m.Get("ChannelState"),
+		ChannelStateDesc:  m.Get("ChannelStateDesc"),
+		CallerIDNum:       m.Get("CallerIDNum"),
+		CallerIDName:      m.Get("CallerIDName"),
+		ConnectedLineNum:  m.Get("ConnectedLineNum"),
+		ConnectedLineName: m.Get("ConnectedLineName"),
+		Exten:             m.Get("Exten"),
+		Context:           m.Get("Context"),
+		BridgeID:          m.Get("BridgeUniqueid"),
+	}
 }
 
 // parseContactStatus maps an AMI ContactStatus event to our row type. See

@@ -350,6 +350,42 @@ export interface RangeQueryResponse {
   series: RangeSeries[];
 }
 
+// ---- Live calls service (in-memory registry, AMI-fed) ----
+
+export interface LiveChannel {
+  uniqueid: string;
+  linkedid: string;
+  channel: string;
+  channelState: string;
+  channelStateDesc: string;
+  callerIdNum: string;
+  callerIdName: string;
+  connectedLineNum: string;
+  connectedLineName: string;
+  exten: string;
+  context: string;
+  bridgeId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LiveCall {
+  linkedid: string;
+  channels: LiveChannel[];
+  startedAt: string;
+  updatedAt: string;
+  bridged: boolean;
+}
+
+export interface ListActiveCallsResponse {
+  calls: LiveCall[];
+}
+
+export const LiveCallsService = {
+  listActive: (options?: RequestOptions) =>
+    asteriskApi.get<ListActiveCallsResponse>('/live/calls', options),
+};
+
 export const DashboardService = {
   query: (
     params: { query: string; time?: string },

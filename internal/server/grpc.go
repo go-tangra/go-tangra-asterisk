@@ -39,6 +39,7 @@ func NewGRPCServer(
 	statsSvc *service.StatsService,
 	regSvc *service.RegistrationService,
 	dashSvc *service.DashboardService,
+	liveSvc *service.LiveCallsService,
 ) *grpc.Server {
 	cfg := ctx.GetConfig()
 	l := ctx.NewLoggerHelper("asterisk/grpc")
@@ -105,6 +106,7 @@ func NewGRPCServer(
 	asteriskpb.RegisterAsteriskStatsServiceServer(srv, statsSvc)
 	asteriskpb.RegisterAsteriskRegistrationServiceServer(srv, regSvc)
 	asteriskpb.RegisterAsteriskDashboardServiceServer(srv, dashSvc)
+	asteriskpb.RegisterAsteriskLiveCallsServiceServer(srv, liveSvc)
 
 	return srv
 }

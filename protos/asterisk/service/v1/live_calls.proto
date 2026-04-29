@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package asterisk.service.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// AsteriskLiveCallsService — read-only snapshot of currently active calls
+// (the in-memory registry fed by the AMI listener).
+//
+// The companion live-update channel is the SSE endpoint at
+// /modules/asterisk/calls/stream — gRPC-gateway can't transcode
+// server-streaming over plain HTTP without extra plumbing, and SSE
+// gives the browser auto-reconnect for free.
+service AsteriskLiveCallsService {
+  rpc ListActiveCalls(ListActiveCallsRequest) returns (ListActiveCallsResponse) {
+    option (google.api.http) = {
+      get: "/v1/live/calls"
+    };
+  }
+}
+
+message ListActiveCallsRequest {}
+
+message ListActiveCallsResponse {
+  repeated LiveCall calls = 1;
+}
+
+// LiveCall mirrors internal/calls.Call. Field names are camelCase via
+// gRPC-gateway JSON marshalling, matching the SSE payload so the
+// frontend can use one type for both transports.
+message LiveCall {
+  string linkedid = 1;
+  repeated LiveChannel channels = 2;
+  google.protobuf.Timestamp started_at = 3;
+  google.protobuf.Timestamp updated_at = 4;
+  bool bridged = 5;
+}
+
+message LiveChannel {
+  string uniqueid = 1;
+  string linkedid = 2;
+  string channel = 3;
+  string channel_state = 4;
+  string channel_state_desc = 5;
+  string caller_id_num = 6;
+  string caller_id_name = 7;
+  string connected_line_num = 8;
+  string connected_line_name = 9;
+  string exten = 10;
+  string context = 11;
+  string bridge_id = 12;
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+}
