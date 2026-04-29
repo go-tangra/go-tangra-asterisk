@@ -135,12 +135,17 @@ func (l *Listener) session(ctx context.Context) error {
 	}()
 
 	r := bufio.NewReader(conn)
-	// Banner.
-	banner, err := readMessage(r)
+	// Banner. AMI sends a single line "Asterisk Call Manager/X.Y.Z\r\n"
+	// with NO terminating blank line. readMessage() would block waiting
+	// for the blank line that ends a normal frame, until Asterisk's
+	// authtimeout (~30s) fires and closes the socket. We'd then see the
+	// banner read "succeed" with the EOF buffered, and the subsequent
+	// Login would go onto a half-closed socket — yielding "login: EOF".
+	banner, err := r.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("read banner: %w", err)
 	}
-	l.log.Infof("AMI banner: %s", banner.Get("Banner"))
+	l.log.Infof("AMI banner: %s", strings.TrimRight(banner, "\r\n"))
 
 	// Login — send bare credentials only. Some Asterisk builds drop the
 	// socket without responding when the Events parameter contains a
