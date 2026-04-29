@@ -136,17 +136,22 @@ func (l *Listener) session(ctx context.Context) error {
 
 	r := bufio.NewReader(conn)
 	// Banner.
-	if _, err := readMessage(r); err != nil {
+	banner, err := readMessage(r)
+	if err != nil {
 		return fmt.Errorf("read banner: %w", err)
 	}
+	l.log.Infof("AMI banner: %s", banner.Get("Banner"))
 
-	// Login.
+	// Login — send bare credentials only. Some Asterisk builds drop the
+	// socket without responding when the Events parameter contains a
+	// class they don't recognise; by leaving Events out of Login we
+	// authenticate first, then subscribe with a separate action below.
+	l.log.Debugf("AMI -> Login user=%s secret_len=%d", l.cfg.Username, len(l.cfg.Secret))
 	if err := l.sendAction(conn, [][2]string{
 		{"Action", "Login"},
 		{"ActionID", "login-1"},
 		{"Username", l.cfg.Username},
 		{"Secret", l.cfg.Secret},
-		{"Events", "system,call,user,command"},
 	}); err != nil {
 		return fmt.Errorf("send login: %w", err)
 	}
@@ -156,6 +161,18 @@ func (l *Listener) session(ctx context.Context) error {
 		return fmt.Errorf("login: %w", err)
 	}
 	l.log.Info("AMI authenticated")
+
+	// Subscribe to event classes. EventMask=on is universally accepted;
+	// failures here are logged but don't tear down the session — the
+	// listener still works for whatever the manager.conf `read=` line
+	// allows by default.
+	if err := l.sendAction(conn, [][2]string{
+		{"Action", "Events"},
+		{"ActionID", "events-1"},
+		{"EventMask", "on"},
+	}); err != nil {
+		l.log.Warnf("send Events action: %v", err)
+	}
 
 	// Reconcile current registrations on connect — fills the gap that
 	// opens when the listener was offline. Best effort; failures here are
@@ -226,7 +243,10 @@ func (l *Listener) reconcile(w net.Conn) error {
 // reconcile-time snapshots.
 func (l *Listener) dispatch(ctx context.Context, msg *Message) {
 	t := msg.Type()
-	l.log.Debugf("AMI frame: type=%s endpoint=%s status=%s", t, msg.Get("EndpointName"), msg.Get("ContactStatus"))
+	if t != "" {
+		l.log.Infof("AMI frame: type=%s endpoint=%s status=%s aor=%s", t,
+			msg.Get("EndpointName"), msg.Get("ContactStatus"), msg.Get("AOR"))
+	}
 	switch t {
 	case "ContactStatus":
 		l.persist(ctx, parseContactStatus(msg))

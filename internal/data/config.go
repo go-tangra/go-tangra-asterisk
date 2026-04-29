@@ -85,20 +85,26 @@ func LoadConfig() (*Config, error) {
 	if v := os.Getenv("ASTERISK_TANGRA_DSN"); v != "" {
 		cfg.TangraDSN = v
 	}
-	if v := os.Getenv("ASTERISK_AMI_HOST"); v != "" {
+	if v := strings.TrimSpace(os.Getenv("ASTERISK_AMI_HOST")); v != "" {
 		cfg.AMI.Host = v
 	}
-	if v := os.Getenv("ASTERISK_AMI_PORT"); v != "" {
+	if v := strings.TrimSpace(os.Getenv("ASTERISK_AMI_PORT")); v != "" {
 		if p, err := strconv.Atoi(v); err == nil {
 			cfg.AMI.Port = p
 		}
 	}
-	if v := os.Getenv("ASTERISK_AMI_USERNAME"); v != "" {
+	if v := strings.TrimSpace(os.Getenv("ASTERISK_AMI_USERNAME")); v != "" {
 		cfg.AMI.Username = v
 	}
-	if v := os.Getenv("ASTERISK_AMI_SECRET"); v != "" {
+	if v := strings.TrimSpace(os.Getenv("ASTERISK_AMI_SECRET")); v != "" {
 		cfg.AMI.Secret = v
 	}
+	// Belt-and-braces: trim YAML-loaded values too. Whitespace in the
+	// secret is the #1 cause of "login: EOF" — Asterisk silently drops
+	// the socket instead of replying with an authentication error.
+	cfg.AMI.Username = strings.TrimSpace(cfg.AMI.Username)
+	cfg.AMI.Secret = strings.TrimSpace(cfg.AMI.Secret)
+	cfg.AMI.Host = strings.TrimSpace(cfg.AMI.Host)
 
 	if cfg.CdrDSN == "" {
 		return nil, fmt.Errorf("asterisk: cdr_dsn is required (configs/data.yaml or ASTERISK_CDR_DSN)")
