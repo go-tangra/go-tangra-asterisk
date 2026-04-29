@@ -42,8 +42,17 @@ type Listener struct {
 	sink    EventSink
 	running atomic.Bool
 
-	mu   sync.Mutex
-	conn net.Conn
+	mu      sync.Mutex
+	conn    net.Conn
+	writeMu sync.Mutex
+}
+
+// sendAction serialises a write so concurrent goroutines (reconcile, pinger,
+// session loop) don't interleave frames on the wire.
+func (l *Listener) sendAction(w net.Conn, headers [][2]string) error {
+	l.writeMu.Lock()
+	defer l.writeMu.Unlock()
+	return writeAction(w, headers)
 }
 
 // NewListener constructs a listener. Run starts the loop; Run is a no-op
@@ -132,12 +141,12 @@ func (l *Listener) session(ctx context.Context) error {
 	}
 
 	// Login.
-	if err := writeAction(conn, [][2]string{
+	if err := l.sendAction(conn, [][2]string{
 		{"Action", "Login"},
 		{"ActionID", "login-1"},
 		{"Username", l.cfg.Username},
 		{"Secret", l.cfg.Secret},
-		{"Events", "system"},
+		{"Events", "system,call,user,command"},
 	}); err != nil {
 		return fmt.Errorf("send login: %w", err)
 	}
@@ -152,10 +161,16 @@ func (l *Listener) session(ctx context.Context) error {
 	// opens when the listener was offline. Best effort; failures here are
 	// logged but don't tear down the session.
 	go func() {
-		if err := l.reconcile(ctx, conn, r); err != nil && ctx.Err() == nil {
+		if err := l.reconcile(conn); err != nil && ctx.Err() == nil {
 			l.log.Warnf("reconcile failed: %v", err)
 		}
 	}()
+
+	// Periodic Ping keeps the read loop fed on quiet PBXs so the 120s
+	// deadline doesn't spuriously tear down the connection.
+	pingCtx, cancelPing := context.WithCancel(ctx)
+	defer cancelPing()
+	go l.pinger(pingCtx, conn)
 
 	// Event loop.
 	for {
@@ -171,16 +186,36 @@ func (l *Listener) session(ctx context.Context) error {
 	}
 }
 
+// pinger sends Action: Ping every 30s. Failures terminate the goroutine; the
+// next read on the session loop will then fail and trigger reconnect.
+func (l *Listener) pinger(ctx context.Context, conn net.Conn) {
+	t := time.NewTicker(30 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if err := l.sendAction(conn, [][2]string{
+				{"Action", "Ping"},
+				{"ActionID", "ping"},
+			}); err != nil {
+				return
+			}
+		}
+	}
+}
+
 // reconcile asks Asterisk for the current contact list and synthesises an
 // event per contact so a "registered now" snapshot lands in the log even if
 // no live ContactStatus event fired during connect.
-func (l *Listener) reconcile(ctx context.Context, w net.Conn, _ *bufio.Reader) error {
+func (l *Listener) reconcile(w net.Conn) error {
 	// PJSIPShowContacts returns ContactList events followed by
 	// ContactListComplete. Because the read loop is the single consumer of
 	// the connection, we can't pull events here ourselves — instead we just
 	// trigger the action and let dispatch() handle ContactList rows as
 	// regular events (treating them like ContactStatus with status=Reachable).
-	return writeAction(w, [][2]string{
+	return l.sendAction(w, [][2]string{
 		{"Action", "PJSIPShowContacts"},
 		{"ActionID", "reconcile-1"},
 	})
@@ -190,7 +225,9 @@ func (l *Listener) reconcile(ctx context.Context, w net.Conn, _ *bufio.Reader) e
 // directly, and treat ContactList (response to PJSIPShowContacts) as
 // reconcile-time snapshots.
 func (l *Listener) dispatch(ctx context.Context, msg *Message) {
-	switch msg.Type() {
+	t := msg.Type()
+	l.log.Debugf("AMI frame: type=%s endpoint=%s status=%s", t, msg.Get("EndpointName"), msg.Get("ContactStatus"))
+	switch t {
 	case "ContactStatus":
 		l.persist(ctx, parseContactStatus(msg))
 	case "ContactList":
@@ -211,7 +248,7 @@ func (l *Listener) persist(ctx context.Context, e *data.PJSIPRegEvent) {
 // ActionID and is a Response. Returns an error if the response is not
 // "Success".
 func awaitResponse(r *bufio.Reader, actionID string) error {
-	for i := 0; i < 32; i++ {
+	for range 32 {
 		msg, err := readMessage(r)
 		if err != nil {
 			return err
