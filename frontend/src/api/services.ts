@@ -324,3 +324,48 @@ export const RegistrationService = {
       options,
     ),
 };
+
+// ---- Dashboard service (Prometheus proxy) ----
+
+export interface InstantSample {
+  labels: Record<string, string>;
+  timestamp: string;
+  value: number;
+  hasValue: boolean;
+}
+
+export interface InstantQueryResponse {
+  series: InstantSample[];
+}
+
+export interface RangeSeries {
+  labels: Record<string, string>;
+  // gRPC-gateway encodes repeated google.protobuf.Timestamp as a JSON
+  // array of RFC3339 strings.
+  timestamps: string[];
+  values: number[];
+}
+
+export interface RangeQueryResponse {
+  series: RangeSeries[];
+}
+
+export const DashboardService = {
+  query: (
+    params: { query: string; time?: string },
+    options?: RequestOptions,
+  ) =>
+    asteriskApi.get<InstantQueryResponse>(
+      `/dashboard/query${buildQuery(params)}`,
+      options,
+    ),
+
+  queryRange: (
+    params: { query: string; start: string; end: string; stepSeconds: number },
+    options?: RequestOptions,
+  ) =>
+    asteriskApi.get<RangeQueryResponse>(
+      `/dashboard/query_range${buildQuery(params)}`,
+      options,
+    ),
+};

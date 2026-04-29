@@ -37,7 +37,9 @@ func initApp(context *bootstrap.Context) (*kratos.App, func(), error) {
 	statsService := service.NewStatsService(context, statsRepo)
 	pjsipRegRepo := data.NewPJSIPRegRepo(context, mySQLClients)
 	registrationService := service.NewRegistrationService(context, pjsipRegRepo)
-	grpcServer := server.NewGRPCServer(context, certManager, cdrService, statsService, registrationService)
+	prometheusClient := data.NewPrometheusClient(config)
+	dashboardService := service.NewDashboardService(context, prometheusClient)
+	grpcServer := server.NewGRPCServer(context, certManager, cdrService, statsService, registrationService, dashboardService)
 	httpServer := server.NewHTTPServer(context, mySQLClients)
 	client, err := data.NewRegistrationClient(context)
 	if err != nil {

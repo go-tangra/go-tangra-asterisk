@@ -8,7 +8,9 @@
     "dev": "vite --port 3013"
   },
   "dependencies": {
-    "@module-federation/runtime": "^0.21.6"
+    "@module-federation/runtime": "^0.21.6",
+    "echarts": "^6.0.0",
+    "vue-echarts": "^8.0.1"
   },
   "devDependencies": {
     "@module-federation/vite": "^1.11.0",

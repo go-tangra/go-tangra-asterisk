@@ -44,6 +44,16 @@ const routes: RouteRecordRaw[] = [
         },
         component: () => import('./views/extensions/index.vue'),
       },
+      {
+        path: 'dashboards',
+        name: 'AsteriskDashboards',
+        meta: {
+          icon: 'lucide:activity',
+          title: 'asterisk.menu.dashboards',
+          authority: ['platform:admin', 'tenant:manager'],
+        },
+        component: () => import('./views/dashboards/index.vue'),
+      },
     ],
   },
 ];

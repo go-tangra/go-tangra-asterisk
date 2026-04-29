@@ -3,7 +3,8 @@
     "asterisk": "Asterisk",
     "calls": "Calls",
     "overview": "Overview",
-    "extensions": "Extensions"
+    "extensions": "Extensions",
+    "dashboards": "Dashboards"
   },
   "page": {
     "calls": {

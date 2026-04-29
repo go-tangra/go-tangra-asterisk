@@ -19,5 +19,6 @@ var ProviderSet = wire.NewSet(
 	data.NewStatsRepo,
 	data.NewPJSIPRegRepo,
 	data.NewRegistrationClient,
+	data.NewPrometheusClient,
 	NewAMIListener,
 )

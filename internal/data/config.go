@@ -27,6 +27,11 @@ type Config struct {
 	QueryTimeout    time.Duration `yaml:"query_timeout"`
 
 	AMI AMIConfig `yaml:"ami"`
+
+	// PrometheusURL points at a Prometheus server scraping the
+	// freepbx-exporter sidecar. When empty the dashboard endpoints return
+	// PROMETHEUS_DISABLED. Override with ASTERISK_PROMETHEUS_URL.
+	PrometheusURL string `yaml:"prometheus_url"`
 }
 
 // AMIConfig holds the Asterisk Manager Interface listener settings. When
@@ -105,6 +110,11 @@ func LoadConfig() (*Config, error) {
 	cfg.AMI.Username = strings.TrimSpace(cfg.AMI.Username)
 	cfg.AMI.Secret = strings.TrimSpace(cfg.AMI.Secret)
 	cfg.AMI.Host = strings.TrimSpace(cfg.AMI.Host)
+
+	if v := strings.TrimSpace(os.Getenv("ASTERISK_PROMETHEUS_URL")); v != "" {
+		cfg.PrometheusURL = v
+	}
+	cfg.PrometheusURL = strings.TrimRight(strings.TrimSpace(cfg.PrometheusURL), "/")
 
 	if cfg.CdrDSN == "" {
 		return nil, fmt.Errorf("asterisk: cdr_dsn is required (configs/data.yaml or ASTERISK_CDR_DSN)")

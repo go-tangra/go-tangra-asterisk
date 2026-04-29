@@ -31,6 +31,13 @@ Environment=ASTERISK_CONFIG_DSN=
 # recordingfile column is non-empty. Leave empty to disable the endpoint.
 Environment=ASTERISK_RECORDINGS_PATH=/var/spool/asterisk/monitor
 
+# Prometheus base URL. When set, the Dashboards submenu in the UI is
+# populated by proxying PromQL queries through this module to the
+# configured Prometheus. Expects metrics from
+# https://github.com/menta2k/freepbx-exporter under the `asterisk_*`
+# namespace. Leave empty to disable the dashboards.
+Environment=ASTERISK_PROMETHEUS_URL=http://127.0.0.1:9090
+
 # mTLS server certs (gRPC server). Paths follow the cert-manager convention
 # under $CERTS_DIR (set in /etc/tangra-asterisk/env):
 #   {CERTS_DIR}/ca/ca.crt

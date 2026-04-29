@@ -52,6 +52,18 @@ menus:
       - platform:admin
       - tenant:manager
 
+  - id: asterisk-dashboards
+    parent_id: asterisk
+    type: MENU
+    name: Dashboards
+    path: dashboards
+    component: app/asterisk/dashboards/index.vue
+    icon: lucide:activity
+    order: 4
+    authority:
+      - platform:admin
+      - tenant:manager
+
 permission_groups:
   - name: Asterisk
     module: asterisk
