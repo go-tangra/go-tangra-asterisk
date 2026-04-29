@@ -144,7 +144,12 @@ async function refresh(): Promise<void> {
     ] = await Promise.all([
       instant('asterisk_up'),
       instant('asterisk_uptime_seconds'),
-      instant('asterisk_current_calls'),
+      // Active calls = bridged-channel pairs. Asterisk's native
+      // CoreCurrentCalls field counts call legs (typically 2 per real
+      // conversation), which surprises users; counting Up channels and
+      // halving matches the operator-intuitive "how many conversations
+      // are happening right now". Doesn't include ringing-only legs.
+      instant('sum(asterisk_channels_by_state{state="Up"}) / 2'),
       instant('asterisk_channels_active'),
       instant('asterisk_scrape_duration_seconds'),
       instant('sum(asterisk_scrape_errors_total)'),
@@ -155,7 +160,7 @@ async function refresh(): Promise<void> {
       instant('asterisk_queue_completed_calls'),
       instant('asterisk_queue_abandoned_calls'),
       instant('asterisk_queue_members'),
-      rangeQuery('asterisk_current_calls'),
+      rangeQuery('sum(asterisk_channels_by_state{state="Up"}) / 2'),
       rangeQuery('sum(asterisk_pjsip_endpoint_up{kind="extension"})'),
     ]);
 
