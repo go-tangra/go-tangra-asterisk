@@ -42,6 +42,31 @@ export interface Call {
 // call; outbound = originated an outbound call. Internal calls don't
 // contribute to either bucket.
 
+export type QualityBand =
+  | 'QUALITY_UNKNOWN'
+  | 'QUALITY_EXCELLENT'
+  | 'QUALITY_GOOD'
+  | 'QUALITY_FAIR'
+  | 'QUALITY_POOR'
+  | 'QUALITY_BAD';
+
+export interface RTPQoS {
+  rxJitterMs: number;
+  txJitterMs: number;
+  rttMs: number;
+  rxLoss: number;
+  txLoss: number;
+  rxCount: number;
+  txCount: number;
+  rxLossPercent: number;
+  txLossPercent: number;
+  rxMes: number;
+  txMes: number;
+  rxMos: number;
+  txMos: number;
+  quality: QualityBand;
+}
+
 export interface CallLeg {
   uniqueid: string;
   calldate: string;
@@ -56,6 +81,7 @@ export interface CallLeg {
   billsecSeconds: number;
   extension?: string;
   recordingFile: string;
+  rtpQos?: RTPQoS;
 }
 
 export interface CelEvent {

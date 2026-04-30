@@ -143,7 +143,46 @@ func legToProto(l *data.CallLeg) *asteriskpb.CallLeg {
 		ext := l.Extension
 		out.Extension = &ext
 	}
+	if l.RTPQoS != nil {
+		out.RtpQos = qosToProto(l.RTPQoS)
+	}
 	return out
+}
+
+func qosToProto(q *data.RTPQoS) *asteriskpb.RTPQoS {
+	return &asteriskpb.RTPQoS{
+		RxJitterMs:     q.RxJitterMs,
+		TxJitterMs:     q.TxJitterMs,
+		RttMs:          q.RTTMs,
+		RxLoss:         q.RxLoss,
+		TxLoss:         q.TxLoss,
+		RxCount:        q.RxCount,
+		TxCount:        q.TxCount,
+		RxLossPercent:  q.RxLossPercent,
+		TxLossPercent:  q.TxLossPercent,
+		RxMes:          q.RxMes,
+		TxMes:          q.TxMes,
+		RxMos:          q.RxMOS,
+		TxMos:          q.TxMOS,
+		Quality:        qualityToProto(q.Quality),
+	}
+}
+
+func qualityToProto(b data.QualityBand) asteriskpb.QualityBand {
+	switch b {
+	case data.QualityExcellent:
+		return asteriskpb.QualityBand_QUALITY_EXCELLENT
+	case data.QualityGood:
+		return asteriskpb.QualityBand_QUALITY_GOOD
+	case data.QualityFair:
+		return asteriskpb.QualityBand_QUALITY_FAIR
+	case data.QualityPoor:
+		return asteriskpb.QualityBand_QUALITY_POOR
+	case data.QualityBad:
+		return asteriskpb.QualityBand_QUALITY_BAD
+	default:
+		return asteriskpb.QualityBand_QUALITY_UNKNOWN
+	}
 }
 
 func eventToProto(e *data.CelEvent) *asteriskpb.CelEvent {

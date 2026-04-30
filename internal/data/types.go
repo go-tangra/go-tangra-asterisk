@@ -38,6 +38,9 @@ type CallLeg struct {
 	BillsecSeconds  int32
 	Extension       string
 	RecordingFile   string
+	// RTPQoS is parsed from the cdr.rtpqos column; nil when the column
+	// is empty (call not bridged, or no RTCP report received).
+	RTPQoS *RTPQoS
 }
 
 // CelEvent is one row from cel.

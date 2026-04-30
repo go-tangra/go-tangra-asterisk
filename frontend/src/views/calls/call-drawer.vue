@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { useVbenDrawer } from 'shell/vben/common-ui';
 import { $t } from 'shell/locales';
@@ -168,7 +168,78 @@ const legColumns = [
   { title: 'disposition', dataIndex: 'disposition', key: 'disposition', width: 130 },
   { title: 'duration', dataIndex: 'durationSeconds', key: 'durationSeconds', width: 90 },
   { title: 'billsec', dataIndex: 'billsecSeconds', key: 'billsecSeconds', width: 90 },
+  { title: 'quality', key: 'quality', width: 280 },
 ];
+
+// Quality colour palette — one shared definition so the per-direction
+// badges (↓ rx / ↑ tx) and the overall worst-band tag agree.
+function qualityColor(band: string): string {
+  switch (band) {
+    case 'QUALITY_EXCELLENT': return '#52C41A';
+    case 'QUALITY_GOOD':      return '#73D13D';
+    case 'QUALITY_FAIR':      return '#FAAD14';
+    case 'QUALITY_POOR':      return '#FA8C16';
+    case 'QUALITY_BAD':       return '#FF4D4F';
+    default:                  return '#999999';
+  }
+}
+
+function qualityLabel(band: string): string {
+  switch (band) {
+    case 'QUALITY_EXCELLENT': return 'Excellent';
+    case 'QUALITY_GOOD':      return 'Good';
+    case 'QUALITY_FAIR':      return 'Fair';
+    case 'QUALITY_POOR':      return 'Poor';
+    case 'QUALITY_BAD':       return 'Bad';
+    default:                  return '—';
+  }
+}
+
+// Translate a per-direction MOS (1.0–4.5) into the same band ladder so
+// rx and tx tags are coloured independently. Operators pinpoint the
+// problem direction by looking at which side is red.
+function bandFromMos(mos: number): string {
+  if (mos <= 0)   return 'QUALITY_UNKNOWN';
+  if (mos >= 4.3) return 'QUALITY_EXCELLENT';
+  if (mos >= 4.0) return 'QUALITY_GOOD';
+  if (mos >= 3.6) return 'QUALITY_FAIR';
+  if (mos >= 3.1) return 'QUALITY_POOR';
+  return 'QUALITY_BAD';
+}
+
+// Roll up worst observed quality across all legs of a call so the
+// drawer can show one big "this call had problems on Leg X TX side"
+// summary at the top.
+interface CallQualitySummary {
+  band: string;
+  worstLegIndex: number;
+  worstDirection: 'rx' | 'tx' | '';
+  worstMos: number;
+}
+
+const callQualitySummary = computed<CallQualitySummary | null>(() => {
+  let worst: CallQualitySummary | null = null;
+  legs.value.forEach((leg, idx) => {
+    const q = leg.rtpQos;
+    if (!q) return;
+    const candidates: { mos: number; dir: 'rx' | 'tx' }[] = [
+      { mos: q.rxMos, dir: 'rx' },
+      { mos: q.txMos, dir: 'tx' },
+    ];
+    for (const c of candidates) {
+      if (c.mos <= 0) continue;
+      if (!worst || c.mos < worst.worstMos) {
+        worst = {
+          band: bandFromMos(c.mos),
+          worstLegIndex: idx,
+          worstDirection: c.dir,
+          worstMos: c.mos,
+        };
+      }
+    }
+  });
+  return worst;
+});
 
 const timelineColumns = [
   { title: 'time', dataIndex: 'eventTime', key: 'eventTime', width: 180 },
@@ -306,13 +377,64 @@ const onlineColumns = [
           />
         </TabPane>
         <TabPane key="legs" :tab="$t('asterisk.page.calls.legs')">
+          <div
+            v-if="callQualitySummary"
+            style="margin-bottom: 12px; padding: 8px 12px; border-radius: 4px; background: #FAFAFA"
+          >
+            <Tag :color="qualityColor(callQualitySummary.band)" style="margin-right: 8px">
+              {{ qualityLabel(callQualitySummary.band) }}
+            </Tag>
+            Worst direction:
+            <strong>leg {{ callQualitySummary.worstLegIndex + 1 }}</strong>
+            ·
+            <strong>{{ callQualitySummary.worstDirection === 'rx' ? 'incoming (RX)' : 'outgoing (TX)' }}</strong>
+            · MOS {{ callQualitySummary.worstMos.toFixed(2) }}
+            <span style="color: #888; margin-left: 8px; font-size: 12px">
+              The other side of the bridge heard this leg's TX as their RX — pinpoint network direction by
+              looking at which side is red below.
+            </span>
+          </div>
           <Table
             :columns="legColumns"
             :data-source="legs"
             :pagination="false"
             row-key="uniqueid"
             size="small"
-          />
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'quality' && record.rtpQos">
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center">
+                  <Tag :color="qualityColor(bandFromMos(record.rtpQos.rxMos))">
+                    ↓ RX {{ record.rtpQos.rxMos > 0 ? record.rtpQos.rxMos.toFixed(2) : '—' }}
+                  </Tag>
+                  <Tag :color="qualityColor(bandFromMos(record.rtpQos.txMos))">
+                    ↑ TX {{ record.rtpQos.txMos > 0 ? record.rtpQos.txMos.toFixed(2) : '—' }}
+                  </Tag>
+                  <span
+                    v-if="record.rtpQos.rxLossPercent + record.rtpQos.txLossPercent > 0"
+                    :style="{
+                      fontSize: '11px',
+                      color: (record.rtpQos.rxLossPercent + record.rtpQos.txLossPercent) > 2 ? '#FF4D4F' : '#888',
+                    }"
+                  >
+                    loss rx {{ record.rtpQos.rxLossPercent.toFixed(1) }}% / tx {{ record.rtpQos.txLossPercent.toFixed(1) }}%
+                  </span>
+                  <span
+                    v-if="record.rtpQos.rttMs > 0"
+                    :style="{
+                      fontSize: '11px',
+                      color: record.rtpQos.rttMs > 200 ? '#FF4D4F' : '#888',
+                    }"
+                  >
+                    rtt {{ record.rtpQos.rttMs.toFixed(0) }}ms
+                  </span>
+                </div>
+              </template>
+              <template v-else-if="column.key === 'quality'">
+                <span style="color: #BBB">—</span>
+              </template>
+            </template>
+          </Table>
         </TabPane>
         <TabPane key="timeline" :tab="$t('asterisk.page.calls.timeline')">
           <Table

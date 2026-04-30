@@ -80,6 +80,65 @@ func (Disposition) EnumDescriptor() ([]byte, []int) {
 	return file_asterisk_service_v1_cdr_proto_rawDescGZIP(), []int{0}
 }
 
+// QualityBand is an operator-friendly bucket derived from MOS.
+type QualityBand int32
+
+const (
+	QualityBand_QUALITY_UNKNOWN   QualityBand = 0
+	QualityBand_QUALITY_EXCELLENT QualityBand = 1 // MOS >= 4.3
+	QualityBand_QUALITY_GOOD      QualityBand = 2 // MOS >= 4.0
+	QualityBand_QUALITY_FAIR      QualityBand = 3 // MOS >= 3.6
+	QualityBand_QUALITY_POOR      QualityBand = 4 // MOS >= 3.1
+	QualityBand_QUALITY_BAD       QualityBand = 5 // MOS < 3.1
+)
+
+// Enum value maps for QualityBand.
+var (
+	QualityBand_name = map[int32]string{
+		0: "QUALITY_UNKNOWN",
+		1: "QUALITY_EXCELLENT",
+		2: "QUALITY_GOOD",
+		3: "QUALITY_FAIR",
+		4: "QUALITY_POOR",
+		5: "QUALITY_BAD",
+	}
+	QualityBand_value = map[string]int32{
+		"QUALITY_UNKNOWN":   0,
+		"QUALITY_EXCELLENT": 1,
+		"QUALITY_GOOD":      2,
+		"QUALITY_FAIR":      3,
+		"QUALITY_POOR":      4,
+		"QUALITY_BAD":       5,
+	}
+)
+
+func (x QualityBand) Enum() *QualityBand {
+	p := new(QualityBand)
+	*p = x
+	return p
+}
+
+func (x QualityBand) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (QualityBand) Descriptor() protoreflect.EnumDescriptor {
+	return file_asterisk_service_v1_cdr_proto_enumTypes[1].Descriptor()
+}
+
+func (QualityBand) Type() protoreflect.EnumType {
+	return &file_asterisk_service_v1_cdr_proto_enumTypes[1]
+}
+
+func (x QualityBand) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use QualityBand.Descriptor instead.
+func (QualityBand) EnumDescriptor() ([]byte, []int) {
+	return file_asterisk_service_v1_cdr_proto_rawDescGZIP(), []int{1}
+}
+
 // One logical call (collapsed across all legs sharing a linkedid).
 type Call struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -502,8 +561,15 @@ type CallLeg struct {
 	BillsecSeconds  int32                  `protobuf:"varint,11,opt,name=billsec_seconds,json=billsecSeconds,proto3" json:"billsec_seconds,omitempty"`
 	Extension       *string                `protobuf:"bytes,12,opt,name=extension,proto3,oneof" json:"extension,omitempty"`
 	RecordingFile   string                 `protobuf:"bytes,13,opt,name=recording_file,json=recordingFile,proto3" json:"recording_file,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Per-leg RTP quality, parsed from cdr.rtpqos. Absent when the
+	// column is empty / unpopulated. Each leg sees the call from its
+	// own perspective: rx = packets arriving at this channel, tx =
+	// packets leaving toward the bridged peer. Comparing rx of one leg
+	// to tx of another tells the operator which network direction is
+	// bad.
+	RtpQos        *RTPQoS `protobuf:"bytes,14,opt,name=rtp_qos,json=rtpQos,proto3" json:"rtp_qos,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CallLeg) Reset() {
@@ -627,6 +693,166 @@ func (x *CallLeg) GetRecordingFile() string {
 	return ""
 }
 
+func (x *CallLeg) GetRtpQos() *RTPQoS {
+	if x != nil {
+		return x.RtpQos
+	}
+	return nil
+}
+
+// RTPQoS is the parsed cdr.rtpqos blob. Each *_jitter / *_loss /
+// *_mos field is reported separately for receive vs transmit because
+// asymmetric problems (one-way audio, jittery upload) are common
+// and require directional pinpointing.
+type RTPQoS struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RxJitterMs    float64                `protobuf:"fixed64,1,opt,name=rx_jitter_ms,json=rxJitterMs,proto3" json:"rx_jitter_ms,omitempty"`
+	TxJitterMs    float64                `protobuf:"fixed64,2,opt,name=tx_jitter_ms,json=txJitterMs,proto3" json:"tx_jitter_ms,omitempty"`
+	RttMs         float64                `protobuf:"fixed64,3,opt,name=rtt_ms,json=rttMs,proto3" json:"rtt_ms,omitempty"`
+	RxLoss        int64                  `protobuf:"varint,4,opt,name=rx_loss,json=rxLoss,proto3" json:"rx_loss,omitempty"`
+	TxLoss        int64                  `protobuf:"varint,5,opt,name=tx_loss,json=txLoss,proto3" json:"tx_loss,omitempty"`
+	RxCount       int64                  `protobuf:"varint,6,opt,name=rx_count,json=rxCount,proto3" json:"rx_count,omitempty"`
+	TxCount       int64                  `protobuf:"varint,7,opt,name=tx_count,json=txCount,proto3" json:"tx_count,omitempty"`
+	RxLossPercent float64                `protobuf:"fixed64,8,opt,name=rx_loss_percent,json=rxLossPercent,proto3" json:"rx_loss_percent,omitempty"`
+	TxLossPercent float64                `protobuf:"fixed64,9,opt,name=tx_loss_percent,json=txLossPercent,proto3" json:"tx_loss_percent,omitempty"`
+	RxMes         float64                `protobuf:"fixed64,10,opt,name=rx_mes,json=rxMes,proto3" json:"rx_mes,omitempty"`
+	TxMes         float64                `protobuf:"fixed64,11,opt,name=tx_mes,json=txMes,proto3" json:"tx_mes,omitempty"`
+	RxMos         float64                `protobuf:"fixed64,12,opt,name=rx_mos,json=rxMos,proto3" json:"rx_mos,omitempty"`
+	TxMos         float64                `protobuf:"fixed64,13,opt,name=tx_mos,json=txMos,proto3" json:"tx_mos,omitempty"`
+	// worst-of(rx, tx) bucket for the leg.
+	Quality       QualityBand `protobuf:"varint,14,opt,name=quality,proto3,enum=asterisk.service.v1.QualityBand" json:"quality,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RTPQoS) Reset() {
+	*x = RTPQoS{}
+	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RTPQoS) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RTPQoS) ProtoMessage() {}
+
+func (x *RTPQoS) ProtoReflect() protoreflect.Message {
+	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RTPQoS.ProtoReflect.Descriptor instead.
+func (*RTPQoS) Descriptor() ([]byte, []int) {
+	return file_asterisk_service_v1_cdr_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *RTPQoS) GetRxJitterMs() float64 {
+	if x != nil {
+		return x.RxJitterMs
+	}
+	return 0
+}
+
+func (x *RTPQoS) GetTxJitterMs() float64 {
+	if x != nil {
+		return x.TxJitterMs
+	}
+	return 0
+}
+
+func (x *RTPQoS) GetRttMs() float64 {
+	if x != nil {
+		return x.RttMs
+	}
+	return 0
+}
+
+func (x *RTPQoS) GetRxLoss() int64 {
+	if x != nil {
+		return x.RxLoss
+	}
+	return 0
+}
+
+func (x *RTPQoS) GetTxLoss() int64 {
+	if x != nil {
+		return x.TxLoss
+	}
+	return 0
+}
+
+func (x *RTPQoS) GetRxCount() int64 {
+	if x != nil {
+		return x.RxCount
+	}
+	return 0
+}
+
+func (x *RTPQoS) GetTxCount() int64 {
+	if x != nil {
+		return x.TxCount
+	}
+	return 0
+}
+
+func (x *RTPQoS) GetRxLossPercent() float64 {
+	if x != nil {
+		return x.RxLossPercent
+	}
+	return 0
+}
+
+func (x *RTPQoS) GetTxLossPercent() float64 {
+	if x != nil {
+		return x.TxLossPercent
+	}
+	return 0
+}
+
+func (x *RTPQoS) GetRxMes() float64 {
+	if x != nil {
+		return x.RxMes
+	}
+	return 0
+}
+
+func (x *RTPQoS) GetTxMes() float64 {
+	if x != nil {
+		return x.TxMes
+	}
+	return 0
+}
+
+func (x *RTPQoS) GetRxMos() float64 {
+	if x != nil {
+		return x.RxMos
+	}
+	return 0
+}
+
+func (x *RTPQoS) GetTxMos() float64 {
+	if x != nil {
+		return x.TxMos
+	}
+	return 0
+}
+
+func (x *RTPQoS) GetQuality() QualityBand {
+	if x != nil {
+		return x.Quality
+	}
+	return QualityBand_QUALITY_UNKNOWN
+}
+
 // One CEL event in the call timeline.
 type CelEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -646,7 +872,7 @@ type CelEvent struct {
 
 func (x *CelEvent) Reset() {
 	*x = CelEvent{}
-	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[5]
+	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -658,7 +884,7 @@ func (x *CelEvent) String() string {
 func (*CelEvent) ProtoMessage() {}
 
 func (x *CelEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[5]
+	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -671,7 +897,7 @@ func (x *CelEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CelEvent.ProtoReflect.Descriptor instead.
 func (*CelEvent) Descriptor() ([]byte, []int) {
-	return file_asterisk_service_v1_cdr_proto_rawDescGZIP(), []int{5}
+	return file_asterisk_service_v1_cdr_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CelEvent) GetEventTime() *timestamppb.Timestamp {
@@ -755,7 +981,7 @@ type GetCallResponse struct {
 
 func (x *GetCallResponse) Reset() {
 	*x = GetCallResponse{}
-	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[6]
+	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -767,7 +993,7 @@ func (x *GetCallResponse) String() string {
 func (*GetCallResponse) ProtoMessage() {}
 
 func (x *GetCallResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[6]
+	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -780,7 +1006,7 @@ func (x *GetCallResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCallResponse.ProtoReflect.Descriptor instead.
 func (*GetCallResponse) Descriptor() ([]byte, []int) {
-	return file_asterisk_service_v1_cdr_proto_rawDescGZIP(), []int{6}
+	return file_asterisk_service_v1_cdr_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetCallResponse) GetSummary() *Call {
@@ -846,7 +1072,7 @@ const file_asterisk_service_v1_cdr_proto_rawDesc = "" +
 	"\x05calls\x18\x01 \x03(\v2\x19.asterisk.service.v1.CallR\x05calls\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\"5\n" +
 	"\x0eGetCallRequest\x12#\n" +
-	"\blinkedid\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\blinkedid\"\xe1\x03\n" +
+	"\blinkedid\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\blinkedid\"\x97\x04\n" +
 	"\aCallLeg\x12\x1a\n" +
 	"\buniqueid\x18\x01 \x01(\tR\buniqueid\x126\n" +
 	"\bcalldate\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\bcalldate\x12\x18\n" +
@@ -863,9 +1089,28 @@ const file_asterisk_service_v1_cdr_proto_rawDesc = "" +
 	" \x01(\x05R\x0fdurationSeconds\x12'\n" +
 	"\x0fbillsec_seconds\x18\v \x01(\x05R\x0ebillsecSeconds\x12!\n" +
 	"\textension\x18\f \x01(\tH\x00R\textension\x88\x01\x01\x12%\n" +
-	"\x0erecording_file\x18\r \x01(\tR\rrecordingFileB\f\n" +
+	"\x0erecording_file\x18\r \x01(\tR\rrecordingFile\x124\n" +
+	"\artp_qos\x18\x0e \x01(\v2\x1b.asterisk.service.v1.RTPQoSR\x06rtpQosB\f\n" +
 	"\n" +
-	"_extension\"\xb3\x02\n" +
+	"_extension\"\xb3\x03\n" +
+	"\x06RTPQoS\x12 \n" +
+	"\frx_jitter_ms\x18\x01 \x01(\x01R\n" +
+	"rxJitterMs\x12 \n" +
+	"\ftx_jitter_ms\x18\x02 \x01(\x01R\n" +
+	"txJitterMs\x12\x15\n" +
+	"\x06rtt_ms\x18\x03 \x01(\x01R\x05rttMs\x12\x17\n" +
+	"\arx_loss\x18\x04 \x01(\x03R\x06rxLoss\x12\x17\n" +
+	"\atx_loss\x18\x05 \x01(\x03R\x06txLoss\x12\x19\n" +
+	"\brx_count\x18\x06 \x01(\x03R\arxCount\x12\x19\n" +
+	"\btx_count\x18\a \x01(\x03R\atxCount\x12&\n" +
+	"\x0frx_loss_percent\x18\b \x01(\x01R\rrxLossPercent\x12&\n" +
+	"\x0ftx_loss_percent\x18\t \x01(\x01R\rtxLossPercent\x12\x15\n" +
+	"\x06rx_mes\x18\n" +
+	" \x01(\x01R\x05rxMes\x12\x15\n" +
+	"\x06tx_mes\x18\v \x01(\x01R\x05txMes\x12\x15\n" +
+	"\x06rx_mos\x18\f \x01(\x01R\x05rxMos\x12\x15\n" +
+	"\x06tx_mos\x18\r \x01(\x01R\x05txMos\x12:\n" +
+	"\aquality\x18\x0e \x01(\x0e2 .asterisk.service.v1.QualityBandR\aquality\"\xb3\x02\n" +
 	"\bCelEvent\x129\n" +
 	"\n" +
 	"event_time\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\teventTime\x12\x1c\n" +
@@ -888,7 +1133,14 @@ const file_asterisk_service_v1_cdr_proto_rawDesc = "" +
 	"\x14DISPOSITION_ANSWERED\x10\x01\x12\x19\n" +
 	"\x15DISPOSITION_NO_ANSWER\x10\x02\x12\x14\n" +
 	"\x10DISPOSITION_BUSY\x10\x03\x12\x16\n" +
-	"\x12DISPOSITION_FAILED\x10\x042\xf7\x01\n" +
+	"\x12DISPOSITION_FAILED\x10\x04*\x80\x01\n" +
+	"\vQualityBand\x12\x13\n" +
+	"\x0fQUALITY_UNKNOWN\x10\x00\x12\x15\n" +
+	"\x11QUALITY_EXCELLENT\x10\x01\x12\x10\n" +
+	"\fQUALITY_GOOD\x10\x02\x12\x10\n" +
+	"\fQUALITY_FAIR\x10\x03\x12\x10\n" +
+	"\fQUALITY_POOR\x10\x04\x12\x0f\n" +
+	"\vQUALITY_BAD\x10\x052\xf7\x01\n" +
 	"\x12AsteriskCdrService\x12m\n" +
 	"\tListCalls\x12%.asterisk.service.v1.ListCallsRequest\x1a&.asterisk.service.v1.ListCallsResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/calls\x12r\n" +
 	"\aGetCall\x12#.asterisk.service.v1.GetCallRequest\x1a$.asterisk.service.v1.GetCallResponse\"\x1c\x82\xd3\xe4\x93\x02\x16\x12\x14/v1/calls/{linkedid}B\xe0\x01\n" +
@@ -906,41 +1158,45 @@ func file_asterisk_service_v1_cdr_proto_rawDescGZIP() []byte {
 	return file_asterisk_service_v1_cdr_proto_rawDescData
 }
 
-var file_asterisk_service_v1_cdr_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_asterisk_service_v1_cdr_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_asterisk_service_v1_cdr_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_asterisk_service_v1_cdr_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_asterisk_service_v1_cdr_proto_goTypes = []any{
 	(Disposition)(0),              // 0: asterisk.service.v1.Disposition
-	(*Call)(nil),                  // 1: asterisk.service.v1.Call
-	(*ListCallsRequest)(nil),      // 2: asterisk.service.v1.ListCallsRequest
-	(*ListCallsResponse)(nil),     // 3: asterisk.service.v1.ListCallsResponse
-	(*GetCallRequest)(nil),        // 4: asterisk.service.v1.GetCallRequest
-	(*CallLeg)(nil),               // 5: asterisk.service.v1.CallLeg
-	(*CelEvent)(nil),              // 6: asterisk.service.v1.CelEvent
-	(*GetCallResponse)(nil),       // 7: asterisk.service.v1.GetCallResponse
-	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
+	(QualityBand)(0),              // 1: asterisk.service.v1.QualityBand
+	(*Call)(nil),                  // 2: asterisk.service.v1.Call
+	(*ListCallsRequest)(nil),      // 3: asterisk.service.v1.ListCallsRequest
+	(*ListCallsResponse)(nil),     // 4: asterisk.service.v1.ListCallsResponse
+	(*GetCallRequest)(nil),        // 5: asterisk.service.v1.GetCallRequest
+	(*CallLeg)(nil),               // 6: asterisk.service.v1.CallLeg
+	(*RTPQoS)(nil),                // 7: asterisk.service.v1.RTPQoS
+	(*CelEvent)(nil),              // 8: asterisk.service.v1.CelEvent
+	(*GetCallResponse)(nil),       // 9: asterisk.service.v1.GetCallResponse
+	(*timestamppb.Timestamp)(nil), // 10: google.protobuf.Timestamp
 }
 var file_asterisk_service_v1_cdr_proto_depIdxs = []int32{
-	8,  // 0: asterisk.service.v1.Call.calldate:type_name -> google.protobuf.Timestamp
+	10, // 0: asterisk.service.v1.Call.calldate:type_name -> google.protobuf.Timestamp
 	0,  // 1: asterisk.service.v1.Call.disposition:type_name -> asterisk.service.v1.Disposition
-	8,  // 2: asterisk.service.v1.ListCallsRequest.from:type_name -> google.protobuf.Timestamp
-	8,  // 3: asterisk.service.v1.ListCallsRequest.to:type_name -> google.protobuf.Timestamp
+	10, // 2: asterisk.service.v1.ListCallsRequest.from:type_name -> google.protobuf.Timestamp
+	10, // 3: asterisk.service.v1.ListCallsRequest.to:type_name -> google.protobuf.Timestamp
 	0,  // 4: asterisk.service.v1.ListCallsRequest.disposition:type_name -> asterisk.service.v1.Disposition
-	1,  // 5: asterisk.service.v1.ListCallsResponse.calls:type_name -> asterisk.service.v1.Call
-	8,  // 6: asterisk.service.v1.CallLeg.calldate:type_name -> google.protobuf.Timestamp
+	2,  // 5: asterisk.service.v1.ListCallsResponse.calls:type_name -> asterisk.service.v1.Call
+	10, // 6: asterisk.service.v1.CallLeg.calldate:type_name -> google.protobuf.Timestamp
 	0,  // 7: asterisk.service.v1.CallLeg.disposition:type_name -> asterisk.service.v1.Disposition
-	8,  // 8: asterisk.service.v1.CelEvent.event_time:type_name -> google.protobuf.Timestamp
-	1,  // 9: asterisk.service.v1.GetCallResponse.summary:type_name -> asterisk.service.v1.Call
-	5,  // 10: asterisk.service.v1.GetCallResponse.legs:type_name -> asterisk.service.v1.CallLeg
-	6,  // 11: asterisk.service.v1.GetCallResponse.timeline:type_name -> asterisk.service.v1.CelEvent
-	2,  // 12: asterisk.service.v1.AsteriskCdrService.ListCalls:input_type -> asterisk.service.v1.ListCallsRequest
-	4,  // 13: asterisk.service.v1.AsteriskCdrService.GetCall:input_type -> asterisk.service.v1.GetCallRequest
-	3,  // 14: asterisk.service.v1.AsteriskCdrService.ListCalls:output_type -> asterisk.service.v1.ListCallsResponse
-	7,  // 15: asterisk.service.v1.AsteriskCdrService.GetCall:output_type -> asterisk.service.v1.GetCallResponse
-	14, // [14:16] is the sub-list for method output_type
-	12, // [12:14] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	7,  // 8: asterisk.service.v1.CallLeg.rtp_qos:type_name -> asterisk.service.v1.RTPQoS
+	1,  // 9: asterisk.service.v1.RTPQoS.quality:type_name -> asterisk.service.v1.QualityBand
+	10, // 10: asterisk.service.v1.CelEvent.event_time:type_name -> google.protobuf.Timestamp
+	2,  // 11: asterisk.service.v1.GetCallResponse.summary:type_name -> asterisk.service.v1.Call
+	6,  // 12: asterisk.service.v1.GetCallResponse.legs:type_name -> asterisk.service.v1.CallLeg
+	8,  // 13: asterisk.service.v1.GetCallResponse.timeline:type_name -> asterisk.service.v1.CelEvent
+	3,  // 14: asterisk.service.v1.AsteriskCdrService.ListCalls:input_type -> asterisk.service.v1.ListCallsRequest
+	5,  // 15: asterisk.service.v1.AsteriskCdrService.GetCall:input_type -> asterisk.service.v1.GetCallRequest
+	4,  // 16: asterisk.service.v1.AsteriskCdrService.ListCalls:output_type -> asterisk.service.v1.ListCallsResponse
+	9,  // 17: asterisk.service.v1.AsteriskCdrService.GetCall:output_type -> asterisk.service.v1.GetCallResponse
+	16, // [16:18] is the sub-list for method output_type
+	14, // [14:16] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_asterisk_service_v1_cdr_proto_init() }
@@ -955,8 +1211,8 @@ func file_asterisk_service_v1_cdr_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_asterisk_service_v1_cdr_proto_rawDesc), len(file_asterisk_service_v1_cdr_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   7,
+			NumEnums:      2,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

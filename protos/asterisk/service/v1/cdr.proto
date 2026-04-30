@@ -139,6 +139,45 @@ message CallLeg {
   int32 billsec_seconds = 11;
   optional string extension = 12;
   string recording_file = 13;
+  // Per-leg RTP quality, parsed from cdr.rtpqos. Absent when the
+  // column is empty / unpopulated. Each leg sees the call from its
+  // own perspective: rx = packets arriving at this channel, tx =
+  // packets leaving toward the bridged peer. Comparing rx of one leg
+  // to tx of another tells the operator which network direction is
+  // bad.
+  RTPQoS rtp_qos = 14;
+}
+
+// QualityBand is an operator-friendly bucket derived from MOS.
+enum QualityBand {
+  QUALITY_UNKNOWN = 0;
+  QUALITY_EXCELLENT = 1;  // MOS >= 4.3
+  QUALITY_GOOD = 2;       // MOS >= 4.0
+  QUALITY_FAIR = 3;       // MOS >= 3.6
+  QUALITY_POOR = 4;       // MOS >= 3.1
+  QUALITY_BAD = 5;        // MOS < 3.1
+}
+
+// RTPQoS is the parsed cdr.rtpqos blob. Each *_jitter / *_loss /
+// *_mos field is reported separately for receive vs transmit because
+// asymmetric problems (one-way audio, jittery upload) are common
+// and require directional pinpointing.
+message RTPQoS {
+  double rx_jitter_ms = 1;
+  double tx_jitter_ms = 2;
+  double rtt_ms = 3;
+  int64 rx_loss = 4;
+  int64 tx_loss = 5;
+  int64 rx_count = 6;
+  int64 tx_count = 7;
+  double rx_loss_percent = 8;
+  double tx_loss_percent = 9;
+  double rx_mes = 10;
+  double tx_mes = 11;
+  double rx_mos = 12;
+  double tx_mos = 13;
+  // worst-of(rx, tx) bucket for the leg.
+  QualityBand quality = 14;
 }
 
 // One CEL event in the call timeline.

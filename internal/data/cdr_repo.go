@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-kratos/kratos/v2/log"
@@ -16,6 +17,12 @@ type CdrRepo struct {
 	log     *log.Helper
 	mysql   *MySQLClients
 	timeout time.Duration
+
+	// Cache the result of probing for the optional cdr.rtpqos column
+	// (only present when the operator has populated it from the
+	// dialplan via CHANNEL(rtpqos)). Probed on first leg query.
+	rtpqosOnce      sync.Once
+	rtpqosAvailable bool
 }
 
 func NewCdrRepo(ctx *bootstrap.Context, m *MySQLClients) *CdrRepo {
@@ -187,6 +194,78 @@ func (r *CdrRepo) GetCall(ctx context.Context, linkedID string) (*CallSummary, [
 }
 
 func (r *CdrRepo) queryLegs(ctx context.Context, linkedID string) ([]CallLeg, []string, error) {
+	// rtpqos is a custom column some operators add (manually populated
+	// from CHANNEL(rtpqos,...) in the dialplan). We use COALESCE so the
+	// query works whether the column exists or not, but if the table
+	// schema lacks it MySQL will error on the column reference. To stay
+	// robust across stock and custom FreePBX schemas, we probe the
+	// column once per process and fall back to an rtpqos-less query.
+	if r.rtpqosColumnAvailable(ctx) {
+		return r.queryLegsWithQoS(ctx, linkedID)
+	}
+	return r.queryLegsBare(ctx, linkedID)
+}
+
+// rtpqosColumnAvailable returns true once cdr.rtpqos has been
+// confirmed to exist; cached after first probe.
+func (r *CdrRepo) rtpqosColumnAvailable(ctx context.Context) bool {
+	r.rtpqosOnce.Do(func() {
+		const probe = `
+			SELECT 1 FROM information_schema.COLUMNS
+			WHERE TABLE_SCHEMA = DATABASE()
+			  AND TABLE_NAME = 'cdr'
+			  AND COLUMN_NAME = 'rtpqos'
+			LIMIT 1
+		`
+		var n int
+		err := r.mysql.Cdr.QueryRowContext(ctx, probe).Scan(&n)
+		r.rtpqosAvailable = err == nil && n == 1
+	})
+	return r.rtpqosAvailable
+}
+
+func (r *CdrRepo) queryLegsWithQoS(ctx context.Context, linkedID string) ([]CallLeg, []string, error) {
+	const q = `
+		SELECT uniqueid, calldate, channel, dstchannel, src, dst,
+		       lastapp, lastdata, disposition, duration, billsec,
+		       recordingfile, did, rtpqos
+		FROM cdr
+		WHERE linkedid = ?
+		ORDER BY calldate ASC, sequence ASC
+	`
+	rows, err := r.mysql.Cdr.QueryContext(ctx, q, linkedID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("query legs: %w", err)
+	}
+	defer rows.Close()
+
+	var legs []CallLeg
+	var dids []string
+	for rows.Next() {
+		var l CallLeg
+		var did, rtpqos sql.NullString
+		if err := rows.Scan(
+			&l.Uniqueid, &l.CallDate, &l.Channel, &l.Dstchannel,
+			&l.Src, &l.Dst, &l.Lastapp, &l.Lastdata,
+			&l.Disposition, &l.DurationSeconds, &l.BillsecSeconds,
+			&l.RecordingFile, &did, &rtpqos,
+		); err != nil {
+			return nil, nil, fmt.Errorf("scan leg: %w", err)
+		}
+		l.Extension = ExtractExtension(l.Dstchannel)
+		if l.Extension == "" {
+			l.Extension = ExtractExtension(l.Channel)
+		}
+		if rtpqos.Valid {
+			l.RTPQoS = ParseRTPQoS(rtpqos.String)
+		}
+		legs = append(legs, l)
+		dids = append(dids, did.String)
+	}
+	return legs, dids, rows.Err()
+}
+
+func (r *CdrRepo) queryLegsBare(ctx context.Context, linkedID string) ([]CallLeg, []string, error) {
 	const q = `
 		SELECT uniqueid, calldate, channel, dstchannel, src, dst,
 		       lastapp, lastdata, disposition, duration, billsec, recordingfile, did
