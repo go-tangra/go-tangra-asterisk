@@ -21,7 +21,7 @@ import (
 //
 // The admin gateway proxies /modules/asterisk/* to this server, which is how
 // the SPA shell loads the federated remote at runtime.
-func NewHTTPServer(ctx *bootstrap.Context, mysql *data.MySQLClients, registry *calls.Registry, cfg *data.Config) *kratosHttp.Server {
+func NewHTTPServer(ctx *bootstrap.Context, mysql *data.MySQLClients, registry *calls.Registry, cfg *data.Config, stats *data.StatsRepo) *kratosHttp.Server {
 	l := ctx.NewLoggerHelper("asterisk/http")
 
 	addr := os.Getenv("ASTERISK_HTTP_ADDR")
@@ -50,6 +50,18 @@ func NewHTTPServer(ctx *bootstrap.Context, mysql *data.MySQLClients, registry *c
 	recordingHandler := NewRecordingHandler(l, mysql, recordingsBase)
 	route.GET("/recordings/{linkedid}", recordingHandler.Serve)
 	l.Infof("Recording endpoint enabled: base=%s", recordingsBase)
+
+	// Extension directory: small JSON endpoint that joins
+	// asterisk.users into the dashboard so per-extension panels can
+	// show display names instead of bare numbers. Registered via
+	// HandlePrefix to bypass Kratos's middleware (no auth needed —
+	// admin-service gateway already validates the cookie before
+	// proxying).
+	if stats != nil {
+		dirHandler := NewDirectoryHandler(l, stats)
+		srv.HandlePrefix("/directory/extensions", dirHandler)
+		l.Info("Extension directory enabled at /directory/extensions")
+	}
 
 	if registry != nil {
 		// Register via HandlePrefix instead of route.GET so the SSE

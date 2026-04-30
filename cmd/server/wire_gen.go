@@ -42,7 +42,7 @@ func initApp(context *bootstrap.Context) (*kratos.App, func(), error) {
 	callRegistry := providers.NewCallRegistry()
 	liveCallsService := service.NewLiveCallsService(context, callRegistry)
 	grpcServer := server.NewGRPCServer(context, certManager, cdrService, statsService, registrationService, dashboardService, liveCallsService)
-	httpServer := server.NewHTTPServer(context, mySQLClients, callRegistry, config)
+	httpServer := server.NewHTTPServer(context, mySQLClients, callRegistry, config, statsRepo)
 	client, err := data.NewRegistrationClient(context)
 	if err != nil {
 		cleanup()

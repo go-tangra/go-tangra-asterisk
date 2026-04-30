@@ -474,6 +474,51 @@ func (r *StatsRepo) decorateBusiestHour(ctx context.Context, stats []ExtensionSt
 	return nil
 }
 
+// ExtensionDirectoryEntry is a (number, display name) pair from the
+// FreePBX `asterisk.users` table. Used by the live dashboard to enrich
+// per-extension Prometheus metrics with operator-recognisable names.
+type ExtensionDirectoryEntry struct {
+	Extension   string
+	DisplayName string
+}
+
+// ListExtensionDirectory returns every row from asterisk.users that has
+// a non-empty extension number. Best-effort — returns an empty slice
+// (not an error) if the table doesn't exist or the schema differs from
+// stock FreePBX. Results are typically <500 rows so we don't paginate.
+func (r *StatsRepo) ListExtensionDirectory(ctx context.Context) ([]ExtensionDirectoryEntry, error) {
+	if r.mysql == nil || r.mysql.Config == nil {
+		return nil, nil
+	}
+	rows, err := r.mysql.Config.QueryContext(ctx,
+		`SELECT extension, name FROM users WHERE extension <> '' ORDER BY extension`)
+	if err != nil {
+		// Table missing or column mismatch — treat as "directory not
+		// available" rather than a hard failure so the dashboard
+		// gracefully falls back to bare numbers.
+		return nil, nil
+	}
+	defer rows.Close()
+	out := make([]ExtensionDirectoryEntry, 0, 64)
+	for rows.Next() {
+		var ext, name sql.NullString
+		if err := rows.Scan(&ext, &name); err != nil {
+			return nil, err
+		}
+		if !ext.Valid || ext.String == "" {
+			continue
+		}
+		out = append(out, ExtensionDirectoryEntry{
+			Extension:   ext.String,
+			DisplayName: name.String,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (r *StatsRepo) decorateDisplayName(ctx context.Context, stats []ExtensionStat, exts []string) error {
 	if len(exts) == 0 {
 		return nil

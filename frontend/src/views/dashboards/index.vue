@@ -57,6 +57,9 @@ interface DashboardSnapshot {
   scrapeDuration?: number;
   scrapeErrorsTotal?: number;
   endpoints: InstantSample[];
+  // Per-endpoint, kind=extension only — drives the Extensions table
+  // (one row per registered extension with current device_state).
+  extensions: InstantSample[];
   peers: InstantSample[];
   peerLatency: InstantSample[];
   queueCallers: InstantSample[];
@@ -71,6 +74,7 @@ const lastUpdated = ref<Date | null>(null);
 
 const snapshot = ref<DashboardSnapshot>({
   endpoints: [],
+  extensions: [],
   peers: [],
   peerLatency: [],
   queueCallers: [],
@@ -172,6 +176,28 @@ async function loadLiveCallsSnapshot(): Promise<void> {
 // trunk/extension heuristic.
 const registeredExtensionsSeries = ref<RangeSeries | null>(null);
 
+// Extension directory: extension number → display name from FreePBX's
+// asterisk.users table. Loaded once per page open; the directory
+// rarely changes and a stale name is far less alarming than a stale
+// state. The endpoint is plain JSON (not a gRPC call) — see
+// internal/server/directory.go for the rationale.
+const extensionDirectory = ref<Map<string, string>>(new Map());
+
+async function loadExtensionDirectory(): Promise<void> {
+  try {
+    const resp = await fetch('/modules/asterisk/directory/extensions', {
+      credentials: 'include',
+    });
+    if (!resp.ok) return;
+    const body = (await resp.json()) as { entries?: { extension: string; displayName: string }[] };
+    const next = new Map<string, string>();
+    for (const e of body.entries ?? []) next.set(e.extension, e.displayName);
+    extensionDirectory.value = next;
+  } catch {
+    /* directory is best-effort — empty map just means no display names */
+  }
+}
+
 let timer: ReturnType<typeof setInterval> | null = null;
 
 function firstScalar(samples: InstantSample[] | undefined): number | undefined {
@@ -221,6 +247,7 @@ async function refresh(): Promise<void> {
       scrape,
       scrapeErrors,
       endpoints,
+      extensions,
       peers,
       peerLatency,
       queueCallers,
@@ -240,6 +267,8 @@ async function refresh(): Promise<void> {
       instant('asterisk_scrape_duration_seconds'),
       instant('sum(asterisk_scrape_errors_total)'),
       instant('asterisk_pjsip_endpoints'),
+      // Per-extension state for the Extensions table.
+      instant('asterisk_pjsip_endpoint_up{kind="extension"}'),
       instant('asterisk_sip_peers'),
       instant('asterisk_sip_peer_latency_milliseconds'),
       instant('asterisk_queue_callers'),
@@ -258,6 +287,7 @@ async function refresh(): Promise<void> {
       scrapeDuration: firstScalar(scrape),
       scrapeErrorsTotal: firstScalar(scrapeErrors),
       endpoints,
+      extensions,
       peers,
       peerLatency,
       queueCallers,
@@ -277,6 +307,7 @@ onMounted(() => {
   refresh();
   timer = setInterval(refresh, REFRESH_MS);
   loadLiveCallsSnapshot();
+  loadExtensionDirectory();
   connectStream();
 });
 
@@ -374,6 +405,60 @@ const endpointRows = computed<EndpointRow[]>(() =>
     }))
     .sort((a, b) => b.count - a.count),
 );
+
+// Per-extension table: one row per extension with current device_state,
+// up/down indicator, and display name from the FreePBX directory.
+interface ExtensionRow {
+  key: string;
+  extension: string;
+  displayName: string;
+  deviceState: string;
+  registered: boolean;
+}
+
+function deviceStateColor(state: string, registered: boolean): string {
+  if (!registered) return '#FF4D4F';
+  switch (state) {
+    case 'In use':
+    case 'Busy':
+    case 'Ringing':
+      return '#1890FF';
+    case 'Not in use':
+      return '#52C41A';
+    default:
+      return '#999999';
+  }
+}
+
+const extensionRows = computed<ExtensionRow[]>(() => {
+  // Group by extension since the metric carries one series per
+  // (endpoint, device_state) — the value of 1 marks the active state.
+  // Pick the series whose device_state is the current one (value=1),
+  // else the first series so we still show a row with a stale state.
+  const byExt = new Map<string, ExtensionRow>();
+  for (const s of snapshot.value.extensions) {
+    const ext = s.labels.endpoint;
+    if (!ext) continue;
+    const registered = s.hasValue && s.value === 1;
+    const existing = byExt.get(ext);
+    if (existing && !registered) continue;
+    byExt.set(ext, {
+      key: ext,
+      extension: ext,
+      displayName: extensionDirectory.value.get(ext) ?? '',
+      deviceState: s.labels.device_state || '—',
+      registered,
+    });
+  }
+  return [...byExt.values()].sort((a, b) => a.extension.localeCompare(b.extension, undefined, { numeric: true }));
+});
+
+const extensionColumns = [
+  { title: 'Extension', dataIndex: 'extension', key: 'extension', width: 120 },
+  { title: 'Name', dataIndex: 'displayName', key: 'displayName' },
+  { title: 'State', key: 'state', width: 130 },
+  { title: 'Registered', key: 'registered', width: 110 },
+];
 
 interface PeerRow {
   key: string;
@@ -678,6 +763,30 @@ function formatCallDuration(seconds: number): string {
           </Card>
         </Col>
       </Row>
+
+      <Card title="Extensions" size="small" style="margin-bottom: 16px">
+        <Table
+          v-if="extensionRows.length > 0"
+          :columns="extensionColumns"
+          :data-source="extensionRows"
+          :pagination="{ pageSize: 20, showSizeChanger: false }"
+          size="small"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'state'">
+              <Tag :color="deviceStateColor(record.deviceState, record.registered)">
+                {{ record.deviceState }}
+              </Tag>
+            </template>
+            <template v-else-if="column.key === 'registered'">
+              <Tag :color="record.registered ? '#52C41A' : '#FF4D4F'">
+                {{ record.registered ? 'Yes' : 'No' }}
+              </Tag>
+            </template>
+          </template>
+        </Table>
+        <Empty v-else description="No extensions reported" />
+      </Card>
 
       <Row :gutter="16" style="margin-bottom: 16px">
         <Col :span="12">
