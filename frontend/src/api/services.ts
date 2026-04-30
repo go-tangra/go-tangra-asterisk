@@ -82,6 +82,10 @@ export interface CallLeg {
   extension?: string;
   recordingFile: string;
   rtpQos?: RTPQoS;
+  // Peer-side RTP quality from optional cdr.peerrtpqos column. Absent
+  // when operators haven't opted into capturing the bridged peer's
+  // perspective.
+  peerRtpQos?: RTPQoS;
 }
 
 export interface CelEvent {

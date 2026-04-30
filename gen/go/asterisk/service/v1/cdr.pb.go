@@ -561,13 +561,19 @@ type CallLeg struct {
 	BillsecSeconds  int32                  `protobuf:"varint,11,opt,name=billsec_seconds,json=billsecSeconds,proto3" json:"billsec_seconds,omitempty"`
 	Extension       *string                `protobuf:"bytes,12,opt,name=extension,proto3,oneof" json:"extension,omitempty"`
 	RecordingFile   string                 `protobuf:"bytes,13,opt,name=recording_file,json=recordingFile,proto3" json:"recording_file,omitempty"`
-	// Per-leg RTP quality, parsed from cdr.rtpqos. Absent when the
-	// column is empty / unpopulated. Each leg sees the call from its
-	// own perspective: rx = packets arriving at this channel, tx =
-	// packets leaving toward the bridged peer. Comparing rx of one leg
-	// to tx of another tells the operator which network direction is
-	// bad.
-	RtpQos        *RTPQoS `protobuf:"bytes,14,opt,name=rtp_qos,json=rtpQos,proto3" json:"rtp_qos,omitempty"`
+	// Per-leg RTP quality, parsed from cdr.rtpqos. The LOCAL channel's
+	// perspective (the side that ran Set(CDR(rtpqos)=...) in the
+	// dialplan). rx = packets arriving at this channel; tx = packets
+	// leaving toward the peer. Absent when the column is empty.
+	RtpQos *RTPQoS `protobuf:"bytes,14,opt,name=rtp_qos,json=rtpQos,proto3" json:"rtp_qos,omitempty"`
+	// Peer-side RTP quality, parsed from optional cdr.peerrtpqos. The
+	// BRIDGEPEER's perspective — populated via
+	// Set(CDR(peerrtpqos)=${CHANNEL(rtpqos,${BRIDGEPEER})}) in the
+	// dialplan. Diagnostic value: when local rx is good but peer rx is
+	// bad, the trunk's network is the problem (we couldn't see it from
+	// the extension's NIC). Absent when the column doesn't exist or
+	// isn't populated for this row.
+	PeerRtpQos    *RTPQoS `protobuf:"bytes,15,opt,name=peer_rtp_qos,json=peerRtpQos,proto3" json:"peer_rtp_qos,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -696,6 +702,13 @@ func (x *CallLeg) GetRecordingFile() string {
 func (x *CallLeg) GetRtpQos() *RTPQoS {
 	if x != nil {
 		return x.RtpQos
+	}
+	return nil
+}
+
+func (x *CallLeg) GetPeerRtpQos() *RTPQoS {
+	if x != nil {
+		return x.PeerRtpQos
 	}
 	return nil
 }
@@ -1072,7 +1085,7 @@ const file_asterisk_service_v1_cdr_proto_rawDesc = "" +
 	"\x05calls\x18\x01 \x03(\v2\x19.asterisk.service.v1.CallR\x05calls\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\"5\n" +
 	"\x0eGetCallRequest\x12#\n" +
-	"\blinkedid\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\blinkedid\"\x97\x04\n" +
+	"\blinkedid\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\blinkedid\"\xd6\x04\n" +
 	"\aCallLeg\x12\x1a\n" +
 	"\buniqueid\x18\x01 \x01(\tR\buniqueid\x126\n" +
 	"\bcalldate\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\bcalldate\x12\x18\n" +
@@ -1090,7 +1103,9 @@ const file_asterisk_service_v1_cdr_proto_rawDesc = "" +
 	"\x0fbillsec_seconds\x18\v \x01(\x05R\x0ebillsecSeconds\x12!\n" +
 	"\textension\x18\f \x01(\tH\x00R\textension\x88\x01\x01\x12%\n" +
 	"\x0erecording_file\x18\r \x01(\tR\rrecordingFile\x124\n" +
-	"\artp_qos\x18\x0e \x01(\v2\x1b.asterisk.service.v1.RTPQoSR\x06rtpQosB\f\n" +
+	"\artp_qos\x18\x0e \x01(\v2\x1b.asterisk.service.v1.RTPQoSR\x06rtpQos\x12=\n" +
+	"\fpeer_rtp_qos\x18\x0f \x01(\v2\x1b.asterisk.service.v1.RTPQoSR\n" +
+	"peerRtpQosB\f\n" +
 	"\n" +
 	"_extension\"\xb3\x03\n" +
 	"\x06RTPQoS\x12 \n" +
@@ -1183,20 +1198,21 @@ var file_asterisk_service_v1_cdr_proto_depIdxs = []int32{
 	10, // 6: asterisk.service.v1.CallLeg.calldate:type_name -> google.protobuf.Timestamp
 	0,  // 7: asterisk.service.v1.CallLeg.disposition:type_name -> asterisk.service.v1.Disposition
 	7,  // 8: asterisk.service.v1.CallLeg.rtp_qos:type_name -> asterisk.service.v1.RTPQoS
-	1,  // 9: asterisk.service.v1.RTPQoS.quality:type_name -> asterisk.service.v1.QualityBand
-	10, // 10: asterisk.service.v1.CelEvent.event_time:type_name -> google.protobuf.Timestamp
-	2,  // 11: asterisk.service.v1.GetCallResponse.summary:type_name -> asterisk.service.v1.Call
-	6,  // 12: asterisk.service.v1.GetCallResponse.legs:type_name -> asterisk.service.v1.CallLeg
-	8,  // 13: asterisk.service.v1.GetCallResponse.timeline:type_name -> asterisk.service.v1.CelEvent
-	3,  // 14: asterisk.service.v1.AsteriskCdrService.ListCalls:input_type -> asterisk.service.v1.ListCallsRequest
-	5,  // 15: asterisk.service.v1.AsteriskCdrService.GetCall:input_type -> asterisk.service.v1.GetCallRequest
-	4,  // 16: asterisk.service.v1.AsteriskCdrService.ListCalls:output_type -> asterisk.service.v1.ListCallsResponse
-	9,  // 17: asterisk.service.v1.AsteriskCdrService.GetCall:output_type -> asterisk.service.v1.GetCallResponse
-	16, // [16:18] is the sub-list for method output_type
-	14, // [14:16] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	7,  // 9: asterisk.service.v1.CallLeg.peer_rtp_qos:type_name -> asterisk.service.v1.RTPQoS
+	1,  // 10: asterisk.service.v1.RTPQoS.quality:type_name -> asterisk.service.v1.QualityBand
+	10, // 11: asterisk.service.v1.CelEvent.event_time:type_name -> google.protobuf.Timestamp
+	2,  // 12: asterisk.service.v1.GetCallResponse.summary:type_name -> asterisk.service.v1.Call
+	6,  // 13: asterisk.service.v1.GetCallResponse.legs:type_name -> asterisk.service.v1.CallLeg
+	8,  // 14: asterisk.service.v1.GetCallResponse.timeline:type_name -> asterisk.service.v1.CelEvent
+	3,  // 15: asterisk.service.v1.AsteriskCdrService.ListCalls:input_type -> asterisk.service.v1.ListCallsRequest
+	5,  // 16: asterisk.service.v1.AsteriskCdrService.GetCall:input_type -> asterisk.service.v1.GetCallRequest
+	4,  // 17: asterisk.service.v1.AsteriskCdrService.ListCalls:output_type -> asterisk.service.v1.ListCallsResponse
+	9,  // 18: asterisk.service.v1.AsteriskCdrService.GetCall:output_type -> asterisk.service.v1.GetCallResponse
+	17, // [17:19] is the sub-list for method output_type
+	15, // [15:17] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_asterisk_service_v1_cdr_proto_init() }

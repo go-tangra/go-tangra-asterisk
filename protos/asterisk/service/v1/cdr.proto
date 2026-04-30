@@ -139,13 +139,20 @@ message CallLeg {
   int32 billsec_seconds = 11;
   optional string extension = 12;
   string recording_file = 13;
-  // Per-leg RTP quality, parsed from cdr.rtpqos. Absent when the
-  // column is empty / unpopulated. Each leg sees the call from its
-  // own perspective: rx = packets arriving at this channel, tx =
-  // packets leaving toward the bridged peer. Comparing rx of one leg
-  // to tx of another tells the operator which network direction is
-  // bad.
+  // Per-leg RTP quality, parsed from cdr.rtpqos. The LOCAL channel's
+  // perspective (the side that ran Set(CDR(rtpqos)=...) in the
+  // dialplan). rx = packets arriving at this channel; tx = packets
+  // leaving toward the peer. Absent when the column is empty.
   RTPQoS rtp_qos = 14;
+
+  // Peer-side RTP quality, parsed from optional cdr.peerrtpqos. The
+  // BRIDGEPEER's perspective — populated via
+  // Set(CDR(peerrtpqos)=${CHANNEL(rtpqos,${BRIDGEPEER})}) in the
+  // dialplan. Diagnostic value: when local rx is good but peer rx is
+  // bad, the trunk's network is the problem (we couldn't see it from
+  // the extension's NIC). Absent when the column doesn't exist or
+  // isn't populated for this row.
+  RTPQoS peer_rtp_qos = 15;
 }
 
 // QualityBand is an operator-friendly bucket derived from MOS.

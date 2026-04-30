@@ -38,9 +38,17 @@ type CallLeg struct {
 	BillsecSeconds  int32
 	Extension       string
 	RecordingFile   string
-	// RTPQoS is parsed from the cdr.rtpqos column; nil when the column
-	// is empty (call not bridged, or no RTCP report received).
+	// RTPQoS is parsed from the cdr.rtpqos column — the LOCAL channel's
+	// view (the side running Set(CDR(rtpqos)=...)). Nil when empty.
 	RTPQoS *RTPQoS
+
+	// PeerRTPQoS is parsed from the optional cdr.peerrtpqos column —
+	// the BRIDGEPEER's view, captured via
+	// Set(CDR(peerrtpqos)=${CHANNEL(rtpqos,${BRIDGEPEER})}). Nil when
+	// the operator hasn't opted in or the column is empty for this row.
+	// Operators populate it to diagnose asymmetric problems where the
+	// local channel and the bridged peer disagree on quality.
+	PeerRTPQoS *RTPQoS
 }
 
 // CelEvent is one row from cel.

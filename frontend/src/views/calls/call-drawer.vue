@@ -15,6 +15,7 @@ import type {
   Disposition,
   RegStatus,
   RegisteredEndpoint,
+  RTPQoS,
 } from '../../api/services';
 import { formatDateTime } from '../../utils/datetime';
 
@@ -227,33 +228,40 @@ function bandFromMos(mos: number): string {
 }
 
 // Roll up worst observed quality across all legs of a call so the
-// drawer can show one big "this call had problems on Leg X TX side"
-// summary at the top.
+// drawer can show one big "this call had problems on leg X, peer-side
+// TX" summary at the top.
 interface CallQualitySummary {
   band: string;
   worstLegIndex: number;
-  worstDirection: 'rx' | 'tx' | '';
+  worstSide: 'local' | 'peer';
+  worstDirection: 'rx' | 'tx';
   worstMos: number;
 }
 
 const callQualitySummary = computed<CallQualitySummary | null>(() => {
   let worst: CallQualitySummary | null = null;
   legs.value.forEach((leg, idx) => {
-    const q = leg.rtpQos;
-    if (!q) return;
-    const candidates: { mos: number; dir: 'rx' | 'tx' }[] = [
-      { mos: q.rxMos, dir: 'rx' },
-      { mos: q.txMos, dir: 'tx' },
+    const sides: { side: 'local' | 'peer'; q: RTPQoS | undefined }[] = [
+      { side: 'local', q: leg.rtpQos },
+      { side: 'peer', q: leg.peerRtpQos },
     ];
-    for (const c of candidates) {
-      if (c.mos <= 0) continue;
-      if (!worst || c.mos < worst.worstMos) {
-        worst = {
-          band: bandFromMos(c.mos),
-          worstLegIndex: idx,
-          worstDirection: c.dir,
-          worstMos: c.mos,
-        };
+    for (const { side, q } of sides) {
+      if (!q) continue;
+      const candidates: { mos: number; dir: 'rx' | 'tx' }[] = [
+        { mos: q.rxMos, dir: 'rx' },
+        { mos: q.txMos, dir: 'tx' },
+      ];
+      for (const c of candidates) {
+        if (c.mos <= 0) continue;
+        if (!worst || c.mos < worst.worstMos) {
+          worst = {
+            band: bandFromMos(c.mos),
+            worstLegIndex: idx,
+            worstSide: side,
+            worstDirection: c.dir,
+            worstMos: c.mos,
+          };
+        }
       }
     }
   });
@@ -406,15 +414,23 @@ const onlineColumns = [
               <Tag :color="qualityColor(callQualitySummary.band)" style="margin-right: 8px">
                 {{ qualityLabel(callQualitySummary.band) }}
               </Tag>
-              Worst direction:
+              Worst:
               <strong>leg {{ callQualitySummary.worstLegIndex + 1 }}</strong>
+              ·
+              <strong>{{ callQualitySummary.worstSide }} side</strong>
               ·
               <strong>{{ callQualitySummary.worstDirection === 'rx' ? 'incoming (RX)' : 'outgoing (TX)' }}</strong>
               · MOS {{ callQualitySummary.worstMos.toFixed(2) }}
             </template>
             <template #description>
-              The other side of the bridge heard this leg's TX as their RX — pinpoint network direction by
-              looking at which side is red below.
+              <span v-if="callQualitySummary.worstSide === 'local'">
+                The local channel reported this issue. If the peer side is green for the same direction, the
+                problem is on the local network path — the peer didn't see it.
+              </span>
+              <span v-else>
+                The bridged peer reported this issue from its end. If the local side is green, the problem is
+                between the bridge and the peer (e.g. trunk's network) — the local channel didn't see it.
+              </span>
             </template>
           </Alert>
           <Table
@@ -425,36 +441,80 @@ const onlineColumns = [
             size="small"
           >
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'quality' && record.rtpQos">
-                <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center">
-                  <Tag :color="qualityColor(bandFromMos(record.rtpQos.rxMos))">
-                    ↓ RX {{ record.rtpQos.rxMos > 0 ? record.rtpQos.rxMos.toFixed(2) : '—' }}
-                  </Tag>
-                  <Tag :color="qualityColor(bandFromMos(record.rtpQos.txMos))">
-                    ↑ TX {{ record.rtpQos.txMos > 0 ? record.rtpQos.txMos.toFixed(2) : '—' }}
-                  </Tag>
-                  <span
-                    v-if="record.rtpQos.rxLossPercent + record.rtpQos.txLossPercent > 0"
-                    :style="{
-                      fontSize: '11px',
-                      color: (record.rtpQos.rxLossPercent + record.rtpQos.txLossPercent) > 2
-                        ? 'var(--ant-color-error)'
-                        : 'var(--ant-color-text-secondary)',
-                    }"
+              <template v-if="column.key === 'quality' && (record.rtpQos || record.peerRtpQos)">
+                <div style="display: flex; flex-direction: column; gap: 6px">
+                  <div
+                    v-if="record.rtpQos"
+                    style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center"
                   >
-                    loss rx {{ record.rtpQos.rxLossPercent.toFixed(1) }}% / tx {{ record.rtpQos.txLossPercent.toFixed(1) }}%
-                  </span>
-                  <span
-                    v-if="record.rtpQos.rttMs > 0"
-                    :style="{
-                      fontSize: '11px',
-                      color: record.rtpQos.rttMs > 200
-                        ? 'var(--ant-color-error)'
-                        : 'var(--ant-color-text-secondary)',
-                    }"
+                    <span style="font-size: 11px; color: var(--ant-color-text-secondary); min-width: 40px">
+                      local
+                    </span>
+                    <Tag :color="qualityColor(bandFromMos(record.rtpQos.rxMos))">
+                      ↓ RX {{ record.rtpQos.rxMos > 0 ? record.rtpQos.rxMos.toFixed(2) : '—' }}
+                    </Tag>
+                    <Tag :color="qualityColor(bandFromMos(record.rtpQos.txMos))">
+                      ↑ TX {{ record.rtpQos.txMos > 0 ? record.rtpQos.txMos.toFixed(2) : '—' }}
+                    </Tag>
+                    <span
+                      v-if="record.rtpQos.rxLossPercent + record.rtpQos.txLossPercent > 0"
+                      :style="{
+                        fontSize: '11px',
+                        color: (record.rtpQos.rxLossPercent + record.rtpQos.txLossPercent) > 2
+                          ? 'var(--ant-color-error)'
+                          : 'var(--ant-color-text-secondary)',
+                      }"
+                    >
+                      loss rx {{ record.rtpQos.rxLossPercent.toFixed(1) }}% / tx {{ record.rtpQos.txLossPercent.toFixed(1) }}%
+                    </span>
+                    <span
+                      v-if="record.rtpQos.rttMs > 0"
+                      :style="{
+                        fontSize: '11px',
+                        color: record.rtpQos.rttMs > 200
+                          ? 'var(--ant-color-error)'
+                          : 'var(--ant-color-text-secondary)',
+                      }"
+                    >
+                      rtt {{ record.rtpQos.rttMs.toFixed(0) }}ms
+                    </span>
+                  </div>
+                  <div
+                    v-if="record.peerRtpQos"
+                    style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center"
                   >
-                    rtt {{ record.rtpQos.rttMs.toFixed(0) }}ms
-                  </span>
+                    <span style="font-size: 11px; color: var(--ant-color-text-secondary); min-width: 40px">
+                      peer
+                    </span>
+                    <Tag :color="qualityColor(bandFromMos(record.peerRtpQos.rxMos))">
+                      ↓ RX {{ record.peerRtpQos.rxMos > 0 ? record.peerRtpQos.rxMos.toFixed(2) : '—' }}
+                    </Tag>
+                    <Tag :color="qualityColor(bandFromMos(record.peerRtpQos.txMos))">
+                      ↑ TX {{ record.peerRtpQos.txMos > 0 ? record.peerRtpQos.txMos.toFixed(2) : '—' }}
+                    </Tag>
+                    <span
+                      v-if="record.peerRtpQos.rxLossPercent + record.peerRtpQos.txLossPercent > 0"
+                      :style="{
+                        fontSize: '11px',
+                        color: (record.peerRtpQos.rxLossPercent + record.peerRtpQos.txLossPercent) > 2
+                          ? 'var(--ant-color-error)'
+                          : 'var(--ant-color-text-secondary)',
+                      }"
+                    >
+                      loss rx {{ record.peerRtpQos.rxLossPercent.toFixed(1) }}% / tx {{ record.peerRtpQos.txLossPercent.toFixed(1) }}%
+                    </span>
+                    <span
+                      v-if="record.peerRtpQos.rttMs > 0"
+                      :style="{
+                        fontSize: '11px',
+                        color: record.peerRtpQos.rttMs > 200
+                          ? 'var(--ant-color-error)'
+                          : 'var(--ant-color-text-secondary)',
+                      }"
+                    >
+                      rtt {{ record.peerRtpQos.rttMs.toFixed(0) }}ms
+                    </span>
+                  </div>
                 </div>
               </template>
               <template v-else-if="column.key === 'quality'">

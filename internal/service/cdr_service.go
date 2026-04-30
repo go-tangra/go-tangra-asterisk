@@ -146,6 +146,9 @@ func legToProto(l *data.CallLeg) *asteriskpb.CallLeg {
 	if l.RTPQoS != nil {
 		out.RtpQos = qosToProto(l.RTPQoS)
 	}
+	if l.PeerRTPQoS != nil {
+		out.PeerRtpQos = qosToProto(l.PeerRTPQoS)
+	}
 	return out
 }
 

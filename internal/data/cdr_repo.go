@@ -18,11 +18,19 @@ type CdrRepo struct {
 	mysql   *MySQLClients
 	timeout time.Duration
 
-	// Cache the result of probing for the optional cdr.rtpqos column
-	// (only present when the operator has populated it from the
-	// dialplan via CHANNEL(rtpqos)). Probed on first leg query.
-	rtpqosOnce      sync.Once
-	rtpqosAvailable bool
+	// Cache the result of probing for the optional cdr.rtpqos and
+	// cdr.peerrtpqos columns. Both are operator-added (populated from
+	// the dialplan via CHANNEL(rtpqos)). Probed on first leg query.
+	//
+	//   rtpqos     - local channel's RTP stats (the side running the
+	//                Set(CDR(rtpqos)=...) dialplan code)
+	//   peerrtpqos - the BRIDGEPEER's view, captured via
+	//                Set(CDR(peerrtpqos)=${CHANNEL(rtpqos,${BRIDGEPEER})})
+	//                Operators who want two-sided diagnostic clarity
+	//                add this second column.
+	qosColumnsOnce      sync.Once
+	rtpqosAvailable     bool
+	peerRTPQoSAvailable bool
 }
 
 func NewCdrRepo(ctx *bootstrap.Context, m *MySQLClients) *CdrRepo {
@@ -206,33 +214,54 @@ func (r *CdrRepo) queryLegs(ctx context.Context, linkedID string) ([]CallLeg, []
 	return r.queryLegsBare(ctx, linkedID)
 }
 
-// rtpqosColumnAvailable returns true once cdr.rtpqos has been
-// confirmed to exist; cached after first probe.
-func (r *CdrRepo) rtpqosColumnAvailable(ctx context.Context) bool {
-	r.rtpqosOnce.Do(func() {
+// probeQoSColumns checks once which of the optional cdr.rtpqos /
+// cdr.peerrtpqos columns are present. Subsequent leg queries pick the
+// matching SELECT statement.
+func (r *CdrRepo) probeQoSColumns(ctx context.Context) {
+	r.qosColumnsOnce.Do(func() {
 		const probe = `
-			SELECT 1 FROM information_schema.COLUMNS
+			SELECT COLUMN_NAME FROM information_schema.COLUMNS
 			WHERE TABLE_SCHEMA = DATABASE()
 			  AND TABLE_NAME = 'cdr'
-			  AND COLUMN_NAME = 'rtpqos'
-			LIMIT 1
+			  AND COLUMN_NAME IN ('rtpqos', 'peerrtpqos')
 		`
-		var n int
-		err := r.mysql.Cdr.QueryRowContext(ctx, probe).Scan(&n)
-		r.rtpqosAvailable = err == nil && n == 1
+		rows, err := r.mysql.Cdr.QueryContext(ctx, probe)
+		if err != nil {
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var name string
+			if err := rows.Scan(&name); err == nil {
+				switch name {
+				case "rtpqos":
+					r.rtpqosAvailable = true
+				case "peerrtpqos":
+					r.peerRTPQoSAvailable = true
+				}
+			}
+		}
 	})
+}
+
+func (r *CdrRepo) rtpqosColumnAvailable(ctx context.Context) bool {
+	r.probeQoSColumns(ctx)
 	return r.rtpqosAvailable
 }
 
 func (r *CdrRepo) queryLegsWithQoS(ctx context.Context, linkedID string) ([]CallLeg, []string, error) {
-	const q = `
-		SELECT uniqueid, calldate, channel, dstchannel, src, dst,
-		       lastapp, lastdata, disposition, duration, billsec,
-		       recordingfile, did, rtpqos
-		FROM cdr
-		WHERE linkedid = ?
-		ORDER BY calldate ASC, sequence ASC
-	`
+	// Build SELECT dynamically based on which optional columns exist.
+	// Always returns 14 base columns + N qos columns in order:
+	// rtpqos, peerrtpqos.
+	cols := "uniqueid, calldate, channel, dstchannel, src, dst," +
+		" lastapp, lastdata, disposition, duration, billsec," +
+		" recordingfile, did, rtpqos"
+	if r.peerRTPQoSAvailable {
+		cols += ", peerrtpqos"
+	}
+	q := "SELECT " + cols +
+		" FROM cdr WHERE linkedid = ? ORDER BY calldate ASC, sequence ASC"
+
 	rows, err := r.mysql.Cdr.QueryContext(ctx, q, linkedID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("query legs: %w", err)
@@ -243,13 +272,20 @@ func (r *CdrRepo) queryLegsWithQoS(ctx context.Context, linkedID string) ([]Call
 	var dids []string
 	for rows.Next() {
 		var l CallLeg
-		var did, rtpqos sql.NullString
-		if err := rows.Scan(
+		var did, rtpqos, peerrtpqos sql.NullString
+
+		// Slice of scan targets, growing as we know which optional
+		// columns the SELECT included.
+		targets := []any{
 			&l.Uniqueid, &l.CallDate, &l.Channel, &l.Dstchannel,
 			&l.Src, &l.Dst, &l.Lastapp, &l.Lastdata,
 			&l.Disposition, &l.DurationSeconds, &l.BillsecSeconds,
 			&l.RecordingFile, &did, &rtpqos,
-		); err != nil {
+		}
+		if r.peerRTPQoSAvailable {
+			targets = append(targets, &peerrtpqos)
+		}
+		if err := rows.Scan(targets...); err != nil {
 			return nil, nil, fmt.Errorf("scan leg: %w", err)
 		}
 		l.Extension = ExtractExtension(l.Dstchannel)
@@ -258,6 +294,9 @@ func (r *CdrRepo) queryLegsWithQoS(ctx context.Context, linkedID string) ([]Call
 		}
 		if rtpqos.Valid {
 			l.RTPQoS = ParseRTPQoS(rtpqos.String)
+		}
+		if peerrtpqos.Valid {
+			l.PeerRTPQoS = ParseRTPQoS(peerrtpqos.String)
 		}
 		legs = append(legs, l)
 		dids = append(dids, did.String)
