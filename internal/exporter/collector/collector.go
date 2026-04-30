@@ -50,6 +50,7 @@ type Collector struct {
 
 	pjsipEndpointUp    *prometheus.Desc
 	pjsipEndpointCount *prometheus.Desc
+	pjsipContactRTT    *prometheus.Desc
 
 	queueCallers   *prometheus.Desc
 	queueCompleted *prometheus.Desc
@@ -152,6 +153,11 @@ func New(cfg ami.Config, opts ScrapeOptions, logger *slog.Logger, dialer ami.Dia
 			"PJSIP endpoints grouped by device_state and heuristic kind (trunk/extension).",
 			labels("device_state", "kind"), nil,
 		),
+		pjsipContactRTT: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "pjsip", "contact_rtt_milliseconds"),
+			"PJSIP contact qualify round-trip time in milliseconds. Sourced from PJSIPShowContacts.RoundtripUsec; only emitted for contacts with a non-zero RTT (qualify enabled and the latest probe succeeded).",
+			labels("endpoint", "aor"), nil,
+		),
 
 		queueCallers: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "queue", "callers"),
@@ -199,6 +205,7 @@ func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.sipPeerLatencyMs
 	ch <- c.sipPeerCount
 	ch <- c.pjsipEndpointUp
+	ch <- c.pjsipContactRTT
 	ch <- c.pjsipEndpointCount
 	ch <- c.queueCallers
 	ch <- c.queueCompleted
@@ -266,6 +273,7 @@ func (c *Collector) scrape(ctx context.Context, ch chan<- prometheus.Metric) err
 	}
 	if !c.options.DisablePJSIP {
 		collect("pjsip_endpoints", func() error { return c.collectPJSIPEndpoints(ctx, client, ch) })
+		collect("pjsip_contacts", func() error { return c.collectPJSIPContacts(ctx, client, ch) })
 	}
 	if !c.options.DisableQueues {
 		collect("queues", func() error { return c.collectQueues(ctx, client, ch) })

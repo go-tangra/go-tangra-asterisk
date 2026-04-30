@@ -270,7 +270,10 @@ async function refresh(): Promise<void> {
       // Per-extension state for the Extensions table.
       instant('asterisk_pjsip_endpoint_up{kind="extension"}'),
       instant('asterisk_sip_peers'),
-      instant('asterisk_sip_peer_latency_milliseconds'),
+      // PJSIP qualify RTT — exporter v2 metric, one series per
+      // (endpoint, aor). chan_sip's own latency series stays in for
+      // backward compat but is hidden when empty.
+      instant('asterisk_pjsip_contact_rtt_milliseconds or asterisk_sip_peer_latency_milliseconds'),
       instant('asterisk_queue_callers'),
       instant('asterisk_queue_completed_calls'),
       instant('asterisk_queue_abandoned_calls'),
@@ -480,18 +483,25 @@ const peerRows = computed<PeerRow[]>(() =>
 
 interface PeerLatencyRow {
   key: string;
-  peer: string;
+  peer: string;       // endpoint number (PJSIP) or peer name (chan_sip)
+  displayName: string; // resolved from extension directory when available
   latencyMs: number;
 }
 
 const peerLatencyRows = computed<PeerLatencyRow[]>(() =>
   snapshot.value.peerLatency
     .filter((s) => s.hasValue)
-    .map((s, i) => ({
-      key: `${i}`,
-      peer: s.labels.peer || '—',
-      latencyMs: s.value,
-    }))
+    .map((s, i) => {
+      // PJSIP series carry `endpoint` + `aor`; chan_sip series carry `peer`.
+      // Either way, fall through to the first label so a row always renders.
+      const peer = s.labels.endpoint || s.labels.peer || s.labels.aor || '—';
+      return {
+        key: `${i}-${peer}`,
+        peer,
+        displayName: extensionDirectory.value.get(peer) ?? '',
+        latencyMs: s.value,
+      };
+    })
     .sort((a, b) => b.latencyMs - a.latencyMs)
     .slice(0, 20),
 );
@@ -548,7 +558,8 @@ const peerColumns = [
 ];
 
 const peerLatencyColumns = [
-  { title: 'Peer', dataIndex: 'peer', key: 'peer' },
+  { title: 'Extension', dataIndex: 'peer', key: 'peer', width: 120 },
+  { title: 'Name', dataIndex: 'displayName', key: 'displayName' },
   { title: 'Latency (ms)', dataIndex: 'latencyMs', key: 'latencyMs', width: 140 },
 ];
 
@@ -801,31 +812,27 @@ function formatCallDuration(seconds: number): string {
             <Empty v-else description="No endpoints reported" />
           </Card>
         </Col>
-        <Col :span="12">
+        <Col v-if="peerRows.length > 0" :span="12">
           <Card title="SIP peers (chan_sip)" size="small">
             <Table
-              v-if="peerRows.length > 0"
               :columns="peerColumns"
               :data-source="peerRows"
               :pagination="false"
               size="small"
             />
-            <Empty v-else description="No chan_sip peers" />
           </Card>
         </Col>
       </Row>
 
-      <Row :gutter="16" style="margin-bottom: 16px">
+      <Row v-if="peerLatencyRows.length > 0" :gutter="16" style="margin-bottom: 16px">
         <Col :span="12">
-          <Card title="Top peer latency (top 20)" size="small">
+          <Card title="Top latency (top 20)" size="small">
             <Table
-              v-if="peerLatencyRows.length > 0"
               :columns="peerLatencyColumns"
               :data-source="peerLatencyRows"
               :pagination="false"
               size="small"
             />
-            <Empty v-else description="No peer latency samples" />
           </Card>
         </Col>
         <Col :span="12">

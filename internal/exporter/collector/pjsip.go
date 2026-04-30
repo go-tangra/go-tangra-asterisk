@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -87,6 +88,61 @@ func classifyEndpoint(m ami.Message) string {
 		return "extension"
 	}
 	return "trunk"
+}
+
+// collectPJSIPContacts emits asterisk_pjsip_contact_rtt_milliseconds for
+// every PJSIP contact whose RoundtripUsec field is non-zero (i.e.
+// qualify is on and the latest probe succeeded). PJSIPShowContacts
+// returns one ContactList event per registered contact; multiple
+// contacts per AOR are possible (multi-device extensions).
+func (c *Collector) collectPJSIPContacts(ctx context.Context, conn ami.Conn, ch chan<- prometheus.Metric) error {
+	items, err := conn.ListAction(ctx,
+		ami.NewMessage("Action", "PJSIPShowContacts"),
+		"ContactListComplete",
+	)
+	if err != nil {
+		if isUnknownActionErr(err) {
+			return nil
+		}
+		return fmt.Errorf("PJSIPShowContacts: %w", err)
+	}
+
+	// Dedupe per (endpoint, aor) — if a contact has multiple parallel
+	// instances (rinstance ping-pong, multi-device), keep the lowest
+	// observed RTT so the dashboard reflects best-case responsiveness.
+	type key struct{ endpoint, aor string }
+	best := make(map[key]float64, len(items))
+
+	for _, m := range items {
+		if !strings.EqualFold(m.Get("Event"), "ContactList") {
+			continue
+		}
+		endpoint := firstNonEmpty(m.Get("EndpointName"), m.Get("Endpoint"))
+		aor := firstNonEmpty(m.Get("AOR"), m.Get("Aor"))
+		if endpoint == "" {
+			continue
+		}
+		raw := m.Get("RoundtripUsec")
+		if raw == "" {
+			continue
+		}
+		usec, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || usec <= 0 {
+			continue
+		}
+		ms := float64(usec) / 1000.0
+		k := key{endpoint, aor}
+		if cur, ok := best[k]; !ok || ms < cur {
+			best[k] = ms
+		}
+	}
+
+	for k, ms := range best {
+		ch <- prometheus.MustNewConstMetric(
+			c.pjsipContactRTT, prometheus.GaugeValue, ms, k.endpoint, k.aor,
+		)
+	}
+	return nil
 }
 
 func isNumericName(s string) bool {
