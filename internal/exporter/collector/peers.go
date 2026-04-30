@@ -26,7 +26,7 @@ func (c *Collector) collectSIPPeers(ctx context.Context, conn ami.Conn, ch chan<
 		// unavailable, downgrade to a soft error so the rest of the scrape
 		// keeps going. We detect "No such command" / "Invalid/unknown" by
 		// matching common AMI error fragments.
-		if isUnknownActionErr(err) {
+		if isUnknownActionErr(err) || isEmptyResultErr(err) {
 			return nil
 		}
 		return fmt.Errorf("SIPpeers: %w", err)
@@ -96,6 +96,32 @@ func isUnknownActionErr(err error) bool {
 		"no such command",
 		"command not registered",
 		"unknown action",
+	} {
+		if strings.Contains(msg, frag) {
+			return true
+		}
+	}
+	return false
+}
+
+// isEmptyResultErr matches AMI errors that mean "the list is empty"
+// rather than a real failure. Asterisk's manager_pjsip.c (and several
+// other modules) return Response: Error with messages like
+// "No Contacts found" / "No Endpoints found" instead of an empty list
+// followed by *Complete. Treat those as success-with-zero-rows so we
+// don't blank out asterisk_up just because an operator's PBX has zero
+// registrations or zero endpoints.
+func isEmptyResultErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	for _, frag := range []string{
+		"no contacts found",
+		"no endpoints found",
+		"no peers found",
+		"no queues found",
+		"no aors found",
 	} {
 		if strings.Contains(msg, frag) {
 			return true

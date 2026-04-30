@@ -29,7 +29,7 @@ func (c *Collector) collectPJSIPEndpoints(ctx context.Context, conn ami.Conn, ch
 		"EndpointListComplete",
 	)
 	if err != nil {
-		if isUnknownActionErr(err) {
+		if isUnknownActionErr(err) || isEmptyResultErr(err) {
 			return nil
 		}
 		return fmt.Errorf("PJSIPShowEndpoints: %w", err)
@@ -101,7 +101,13 @@ func (c *Collector) collectPJSIPContacts(ctx context.Context, conn ami.Conn, ch 
 		"ContactListComplete",
 	)
 	if err != nil {
-		if isUnknownActionErr(err) {
+		// Asterisk's manager_pjsip.c sends "Response: Error — No
+		// Contacts found" when there are zero registered contacts
+		// instead of a normal empty list. Treat that (and the same
+		// pattern from other AMI list actions) as success-with-zero
+		// rows so the whole scrape doesn't get marked as failed when
+		// an operator's PBX has nobody registered.
+		if isUnknownActionErr(err) || isEmptyResultErr(err) {
 			return nil
 		}
 		return fmt.Errorf("PJSIPShowContacts: %w", err)

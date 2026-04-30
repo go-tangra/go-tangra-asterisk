@@ -26,7 +26,7 @@ func (c *Collector) collectQueues(ctx context.Context, conn ami.Conn, ch chan<- 
 		"QueueStatusComplete",
 	)
 	if err != nil {
-		if isUnknownActionErr(err) {
+		if isUnknownActionErr(err) || isEmptyResultErr(err) {
 			return nil
 		}
 		return fmt.Errorf("QueueStatus: %w", err)
