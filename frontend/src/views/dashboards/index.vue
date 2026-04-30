@@ -49,6 +49,18 @@ const REFRESH_MS = 30_000;
 const RANGE_WINDOW_MS = 60 * 60 * 1000;
 const RANGE_STEP_SECONDS = 60;
 
+// Quality metrics — rolled up over the last hour by Prometheus.
+interface QualitySnapshot {
+  callsTotal: number;          // increase(asterisk_call_quality_total[1h])
+  callsByBand: Record<string, number>;
+  badPercent: number;          // BAD+POOR as % of total
+  rxMosP50: number;
+  txMosP50: number;
+  rttMsP95: number;
+  jitterRxMsP95: number;
+  jitterTxMsP95: number;
+}
+
 interface DashboardSnapshot {
   up?: InstantSample;
   uptimeSeconds?: number;
@@ -66,6 +78,7 @@ interface DashboardSnapshot {
   queueCompleted: InstantSample[];
   queueAbandoned: InstantSample[];
   queueMembers: InstantSample[];
+  quality: QualitySnapshot | null;
 }
 
 const loading = ref(false);
@@ -81,6 +94,7 @@ const snapshot = ref<DashboardSnapshot>({
   queueCompleted: [],
   queueAbandoned: [],
   queueMembers: [],
+  quality: null,
 });
 
 const callsSeries = ref<RangeSeries | null>(null);
@@ -235,6 +249,39 @@ async function rangeQuery(query: string): Promise<RangeSeries | null> {
   }
 }
 
+function buildQualitySnapshot(
+  byBand: InstantSample[],
+  rxMos: InstantSample[],
+  txMos: InstantSample[],
+  rttP95: InstantSample[],
+  jitterRx: InstantSample[],
+  jitterTx: InstantSample[],
+): QualitySnapshot | null {
+  const bands: Record<string, number> = {};
+  let total = 0;
+  let bad = 0;
+  for (const s of byBand) {
+    if (!s.hasValue) continue;
+    const band = s.labels.band || 'UNKNOWN';
+    bands[band] = (bands[band] ?? 0) + s.value;
+    total += s.value;
+    if (band === 'BAD' || band === 'POOR') bad += s.value;
+  }
+  // No data yet — return null so the panel hides until the first
+  // observation lands. PBXs with no rtpqos column never populate it.
+  if (total === 0 && rxMos.length === 0 && txMos.length === 0) return null;
+  return {
+    callsTotal: total,
+    callsByBand: bands,
+    badPercent: total > 0 ? (100 * bad) / total : 0,
+    rxMosP50: firstScalar(rxMos) ?? 0,
+    txMosP50: firstScalar(txMos) ?? 0,
+    rttMsP95: firstScalar(rttP95) ?? 0,
+    jitterRxMsP95: firstScalar(jitterRx) ?? 0,
+    jitterTxMsP95: firstScalar(jitterTx) ?? 0,
+  };
+}
+
 async function refresh(): Promise<void> {
   loading.value = true;
   error.value = '';
@@ -256,6 +303,15 @@ async function refresh(): Promise<void> {
       queueMembers,
       callsRange,
       registeredExtensionsRange,
+      // RTP-quality rollups (last hour). We use increase()/rate() so
+      // the values are window-stable across scrapes — the underlying
+      // counters/histograms are process-wide cumulative.
+      callsByBand,
+      rxMosP50,
+      txMosP50,
+      rttMsP95,
+      jitterRxMsP95,
+      jitterTxMsP95,
     ] = await Promise.all([
       instant('asterisk_up'),
       instant('asterisk_uptime_seconds'),
@@ -280,6 +336,12 @@ async function refresh(): Promise<void> {
       instant('asterisk_queue_members'),
       rangeQuery('asterisk_calls_active'),
       rangeQuery('sum(asterisk_pjsip_endpoint_up{kind="extension"})'),
+      instant('sum by (band) (increase(asterisk_call_quality_total[1h]))'),
+      instant('histogram_quantile(0.5, sum by (le) (rate(asterisk_call_rtp_mos_score_bucket{direction="rx"}[1h])))'),
+      instant('histogram_quantile(0.5, sum by (le) (rate(asterisk_call_rtp_mos_score_bucket{direction="tx"}[1h])))'),
+      instant('histogram_quantile(0.95, sum by (le) (rate(asterisk_call_rtp_rtt_milliseconds_bucket[1h])))'),
+      instant('histogram_quantile(0.95, sum by (le) (rate(asterisk_call_rtp_jitter_milliseconds_bucket{direction="rx"}[1h])))'),
+      instant('histogram_quantile(0.95, sum by (le) (rate(asterisk_call_rtp_jitter_milliseconds_bucket{direction="tx"}[1h])))'),
     ]);
 
     snapshot.value = {
@@ -297,6 +359,7 @@ async function refresh(): Promise<void> {
       queueCompleted,
       queueAbandoned,
       queueMembers,
+      quality: buildQualitySnapshot(callsByBand, rxMosP50, txMosP50, rttMsP95, jitterRxMsP95, jitterTxMsP95),
     };
     callsSeries.value = callsRange;
     registeredExtensionsSeries.value = registeredExtensionsRange;
@@ -556,6 +619,28 @@ const peerColumns = [
   { title: 'Status', dataIndex: 'status', key: 'status' },
   { title: 'Count', dataIndex: 'count', key: 'count', width: 100 },
 ];
+
+// MOS colour bands (matches the call-drawer per-leg colours so the
+// dashboard and drawer agree on what 'bad' looks like).
+function mosColor(mos: number): string {
+  if (mos <= 0) return 'var(--ant-color-text-disabled)';
+  if (mos >= 4.3) return '#52C41A';
+  if (mos >= 4.0) return '#73D13D';
+  if (mos >= 3.6) return '#FAAD14';
+  if (mos >= 3.1) return '#FA8C16';
+  return '#FF4D4F';
+}
+
+function qualityBandColor(band: string): string {
+  switch (band) {
+    case 'EXCELLENT': return '#52C41A';
+    case 'GOOD':      return '#73D13D';
+    case 'FAIR':      return '#FAAD14';
+    case 'POOR':      return '#FA8C16';
+    case 'BAD':       return '#FF4D4F';
+    default:          return '#999999';
+  }
+}
 
 const peerLatencyColumns = [
   { title: 'Extension', dataIndex: 'peer', key: 'peer', width: 120 },
@@ -848,6 +933,73 @@ function formatCallDuration(seconds: number): string {
           </Card>
         </Col>
       </Row>
+
+      <Card
+        v-if="snapshot.quality"
+        title="Call quality (last 1h)"
+        size="small"
+        style="margin-bottom: 16px"
+      >
+        <Row :gutter="16" style="margin-bottom: 12px">
+          <Col :span="6">
+            <Statistic title="Total calls" :value="formatNumber(snapshot.quality.callsTotal)" />
+          </Col>
+          <Col :span="6">
+            <Statistic
+              title="Bad / Poor"
+              :value="`${snapshot.quality.badPercent.toFixed(1)}%`"
+              :value-style="{
+                color: snapshot.quality.badPercent > 5
+                  ? 'var(--ant-color-error)'
+                  : 'var(--ant-color-success)',
+              }"
+            />
+          </Col>
+          <Col :span="6">
+            <Statistic
+              title="MOS rx (p50)"
+              :value="snapshot.quality.rxMosP50 > 0 ? snapshot.quality.rxMosP50.toFixed(2) : '—'"
+              :value-style="{ color: mosColor(snapshot.quality.rxMosP50) }"
+            />
+          </Col>
+          <Col :span="6">
+            <Statistic
+              title="MOS tx (p50)"
+              :value="snapshot.quality.txMosP50 > 0 ? snapshot.quality.txMosP50.toFixed(2) : '—'"
+              :value-style="{ color: mosColor(snapshot.quality.txMosP50) }"
+            />
+          </Col>
+        </Row>
+        <Row :gutter="16">
+          <Col :span="8">
+            <Statistic
+              title="Jitter rx (p95)"
+              :value="snapshot.quality.jitterRxMsP95 > 0 ? `${snapshot.quality.jitterRxMsP95.toFixed(0)} ms` : '—'"
+            />
+          </Col>
+          <Col :span="8">
+            <Statistic
+              title="Jitter tx (p95)"
+              :value="snapshot.quality.jitterTxMsP95 > 0 ? `${snapshot.quality.jitterTxMsP95.toFixed(0)} ms` : '—'"
+            />
+          </Col>
+          <Col :span="8">
+            <Statistic
+              title="RTT (p95)"
+              :value="snapshot.quality.rttMsP95 > 0 ? `${snapshot.quality.rttMsP95.toFixed(0)} ms` : '—'"
+            />
+          </Col>
+        </Row>
+        <div v-if="Object.keys(snapshot.quality.callsByBand).length" style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap">
+          <Tag
+            v-for="band in ['EXCELLENT','GOOD','FAIR','POOR','BAD','UNKNOWN']"
+            :key="band"
+            :color="qualityBandColor(band)"
+          >
+            {{ band }}: {{ Math.round(snapshot.quality.callsByBand[band] ?? 0) }}
+          </Tag>
+        </div>
+      </Card>
 
       <Card title="Scrape health" size="small">
         <Row :gutter="16">

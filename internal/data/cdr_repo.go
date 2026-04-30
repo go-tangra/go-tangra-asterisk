@@ -265,6 +265,55 @@ func (r *CdrRepo) queryLegsWithQoS(ctx context.Context, linkedID string) ([]Call
 	return legs, dids, rows.Err()
 }
 
+// ListLegsWithQoSSince returns CDR rows whose rtpqos column is populated
+// and whose calldate is strictly after `since`. Used by the Prometheus
+// quality collector to incrementally observe new calls without re-counting
+// rows it has already processed. Limited to 1000 rows per call to bound
+// the per-scrape work; if the queue is deeper, the next scrape catches up.
+//
+// Returns (nil, nil) silently when the rtpqos column doesn't exist —
+// the metrics just stay zero and the operator's PBX hasn't opted in.
+func (r *CdrRepo) ListLegsWithQoSSince(ctx context.Context, since time.Time) ([]CallLeg, error) {
+	if !r.rtpqosColumnAvailable(ctx) {
+		return nil, nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, r.timeout)
+	defer cancel()
+
+	const q = `
+		SELECT calldate, channel, dstchannel, disposition,
+		       duration, billsec, rtpqos
+		FROM cdr
+		WHERE calldate > ?
+		  AND rtpqos IS NOT NULL
+		  AND rtpqos <> ''
+		ORDER BY calldate ASC
+		LIMIT 1000
+	`
+	rows, err := r.mysql.Cdr.QueryContext(ctx, q, since)
+	if err != nil {
+		return nil, fmt.Errorf("list legs with qos since %s: %w", since, err)
+	}
+	defer rows.Close()
+
+	out := make([]CallLeg, 0, 64)
+	for rows.Next() {
+		var l CallLeg
+		var rtpqos sql.NullString
+		if err := rows.Scan(
+			&l.CallDate, &l.Channel, &l.Dstchannel, &l.Disposition,
+			&l.DurationSeconds, &l.BillsecSeconds, &rtpqos,
+		); err != nil {
+			return nil, fmt.Errorf("scan leg: %w", err)
+		}
+		if rtpqos.Valid {
+			l.RTPQoS = ParseRTPQoS(rtpqos.String)
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
+}
+
 func (r *CdrRepo) queryLegsBare(ctx context.Context, linkedID string) ([]CallLeg, []string, error) {
 	const q = `
 		SELECT uniqueid, calldate, channel, dstchannel, src, dst,

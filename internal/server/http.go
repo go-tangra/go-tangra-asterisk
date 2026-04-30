@@ -21,7 +21,7 @@ import (
 //
 // The admin gateway proxies /modules/asterisk/* to this server, which is how
 // the SPA shell loads the federated remote at runtime.
-func NewHTTPServer(ctx *bootstrap.Context, mysql *data.MySQLClients, registry *calls.Registry, cfg *data.Config, stats *data.StatsRepo) *kratosHttp.Server {
+func NewHTTPServer(ctx *bootstrap.Context, mysql *data.MySQLClients, registry *calls.Registry, cfg *data.Config, stats *data.StatsRepo, cdr *data.CdrRepo) *kratosHttp.Server {
 	l := ctx.NewLoggerHelper("asterisk/http")
 
 	addr := os.Getenv("ASTERISK_HTTP_ADDR")
@@ -86,7 +86,7 @@ func NewHTTPServer(ctx *bootstrap.Context, mysql *data.MySQLClients, registry *c
 	// route.GET, and DO NOT add an auth wrapper here. If you need to
 	// restrict access, do it at the network layer (firewall the module
 	// port to Prometheus's source IP only).
-	if metrics := exporter.Handler(cfg); metrics != nil {
+	if metrics := exporter.Handler(cfg, cdr); metrics != nil {
 		srv.HandlePrefix("/metrics", metrics)
 		l.Info("Prometheus metrics enabled at /metrics (unauthenticated by design — restrict via network ACLs)")
 	}

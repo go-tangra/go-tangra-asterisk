@@ -23,17 +23,21 @@ import (
 	"github.com/go-tangra/go-tangra-asterisk/internal/data"
 	"github.com/go-tangra/go-tangra-asterisk/internal/exporter/ami"
 	"github.com/go-tangra/go-tangra-asterisk/internal/exporter/collector"
+	"github.com/go-tangra/go-tangra-asterisk/internal/exporter/quality"
 )
 
 // Handler returns an http.Handler that serves Prometheus metrics, or
 // nil when AMI is not configured (in which case the /metrics endpoint
 // should not be registered at all).
 //
-// Each scrape opens a fresh AMI connection — the standard
-// "scrape and disconnect" pattern. This is independent of the
-// long-lived event-stream listener used by the live-calls feature;
-// Asterisk allows many concurrent AMI sessions for the same user.
-func Handler(cfg *data.Config) http.Handler {
+// Each AMI scrape opens a fresh AMI connection — the standard
+// "scrape and disconnect" pattern. The CDR-quality collector reuses
+// the existing MySQL pool from the CdrRepo and tracks a high-watermark
+// so each scrape only observes new cdr rows.
+//
+// cdrRepo may be nil — the call-quality metrics simply won't be
+// exposed. The AMI metrics still are.
+func Handler(cfg *data.Config, cdrRepo *data.CdrRepo) http.Handler {
 	if cfg == nil || cfg.AMI.Host == "" {
 		return nil
 	}
@@ -59,13 +63,18 @@ func Handler(cfg *data.Config) http.Handler {
 	// Dedicated registry so this collector's metrics aren't mixed with
 	// process / Go runtime metrics from the host process — a Prometheus
 	// scrape against the asterisk module should look identical to what
-	// the standalone freepbx-exporter would have served.
+	// the standalone freepbx-exporter would have served, plus our own
+	// asterisk_call_* RTP-quality metrics when cdr.rtpqos is populated.
 	reg := prometheus.NewRegistry()
 	if err := reg.Register(c); err != nil {
 		// Falling back to nil disables the endpoint cleanly; a
 		// duplicate-register error here would only happen during a
 		// programming mistake during refactor.
 		return nil
+	}
+	if cdrRepo != nil {
+		qc := quality.New(cdrRepo, slog.Default())
+		_ = reg.Register(qc) // best-effort — duplicate register is benign here
 	}
 	return promhttp.HandlerFor(reg, promhttp.HandlerOpts{
 		ErrorLog:      slogErrorLogAdapter{},
