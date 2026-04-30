@@ -267,9 +267,10 @@ function buildQualitySnapshot(
     total += s.value;
     if (band === 'BAD' || band === 'POOR') bad += s.value;
   }
-  // No data yet — return null so the panel hides until the first
-  // observation lands. PBXs with no rtpqos column never populate it.
-  if (total === 0 && rxMos.length === 0 && txMos.length === 0) return null;
+  // Always return a snapshot — the panel renders with em-dashes /
+  // zeros until Prometheus has accumulated data. Silently hiding it
+  // makes operators think the feature isn't deployed when really
+  // they just need to wait one hour for increase()/rate() windows.
   return {
     callsTotal: total,
     callsByBand: bands,
