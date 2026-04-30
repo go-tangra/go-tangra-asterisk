@@ -257,11 +257,16 @@ function buildQualitySnapshot(
   jitterRx: InstantSample[],
   jitterTx: InstantSample[],
 ): QualitySnapshot | null {
+  // The counter is now labelled by both band AND side. Total calls
+  // is the local side only (peer is the same calls, just from the
+  // other end of the bridge). Bad % uses local too — the call drawer
+  // already breaks out per-side detail when an operator drills in.
   const bands: Record<string, number> = {};
   let total = 0;
   let bad = 0;
   for (const s of byBand) {
     if (!s.hasValue) continue;
+    if ((s.labels.side ?? 'local') !== 'local') continue;
     const band = s.labels.band || 'UNKNOWN';
     bands[band] = (bands[band] ?? 0) + s.value;
     total += s.value;
@@ -337,12 +342,15 @@ async function refresh(): Promise<void> {
       instant('asterisk_queue_members'),
       rangeQuery('asterisk_calls_active'),
       rangeQuery('sum(asterisk_pjsip_endpoint_up{kind="extension"})'),
-      instant('sum by (band) (increase(asterisk_call_quality_total[1h]))'),
-      instant('histogram_quantile(0.5, sum by (le) (rate(asterisk_call_rtp_mos_score_bucket{direction="rx"}[1h])))'),
-      instant('histogram_quantile(0.5, sum by (le) (rate(asterisk_call_rtp_mos_score_bucket{direction="tx"}[1h])))'),
-      instant('histogram_quantile(0.95, sum by (le) (rate(asterisk_call_rtp_rtt_milliseconds_bucket[1h])))'),
-      instant('histogram_quantile(0.95, sum by (le) (rate(asterisk_call_rtp_jitter_milliseconds_bucket{direction="rx"}[1h])))'),
-      instant('histogram_quantile(0.95, sum by (le) (rate(asterisk_call_rtp_jitter_milliseconds_bucket{direction="tx"}[1h])))'),
+      // Quality counts include BOTH sides so total = local + peer.
+      // The dashboard splits them on render so the operator sees
+      // local and peer side-by-side.
+      instant('sum by (band, side) (increase(asterisk_call_quality_total[1h]))'),
+      instant('histogram_quantile(0.5, sum by (le) (rate(asterisk_call_rtp_mos_score_bucket{direction="rx",side="local"}[1h])))'),
+      instant('histogram_quantile(0.5, sum by (le) (rate(asterisk_call_rtp_mos_score_bucket{direction="tx",side="local"}[1h])))'),
+      instant('histogram_quantile(0.95, sum by (le) (rate(asterisk_call_rtp_rtt_milliseconds_bucket{side="local"}[1h])))'),
+      instant('histogram_quantile(0.95, sum by (le) (rate(asterisk_call_rtp_jitter_milliseconds_bucket{direction="rx",side="local"}[1h])))'),
+      instant('histogram_quantile(0.95, sum by (le) (rate(asterisk_call_rtp_jitter_milliseconds_bucket{direction="tx",side="local"}[1h])))'),
     ]);
 
     snapshot.value = {

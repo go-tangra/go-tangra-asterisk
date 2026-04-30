@@ -41,10 +41,10 @@ type Collector struct {
 
 	// Per-direction histograms — operator can pinpoint which network
 	// path has bad quality.
-	jitterMs    *prometheus.HistogramVec // labels: direction
-	lossPercent *prometheus.HistogramVec // labels: direction
-	mosScore    *prometheus.HistogramVec // labels: direction
-	rttMs       prometheus.Histogram     // RTT is symmetric
+	jitterMs    *prometheus.HistogramVec // labels: direction, side
+	lossPercent *prometheus.HistogramVec // labels: direction, side
+	mosScore    *prometheus.HistogramVec // labels: direction, side
+	rttMs       *prometheus.HistogramVec // labels: side
 
 	// Process-wide observability for the collector itself.
 	scrapeRows   prometheus.Counter
@@ -66,46 +66,49 @@ func New(r repo, logger *slog.Logger) *Collector {
 		logger:   logger,
 		lastSeen: time.Now().UTC(),
 
+		// side="local" = the channel running Set(CDR(rtpqos)=...)
+		// side="peer"  = the BRIDGEPEER's view (CDR(peerrtpqos))
+		// Cardinality: 2 sides × 2 directions = 4 series per histogram.
 		callsByBand: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: ns,
 			Subsystem: "call",
 			Name:      "quality_total",
-			Help:      "Completed calls bucketed by RTP quality band (excellent/good/fair/poor/bad/unknown). One increment per leg with a populated cdr.rtpqos.",
-		}, []string{"band"}),
+			Help:      "Completed calls bucketed by RTP quality band (excellent/good/fair/poor/bad/unknown), per perspective. side=local is the channel running Set(CDR(rtpqos)=...); side=peer is the bridged peer's view.",
+		}, []string{"band", "side"}),
 
 		jitterMs: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: ns,
 			Subsystem: "call",
 			Name:      "rtp_jitter_milliseconds",
-			Help:      "RTP jitter per leg from cdr.rtpqos. direction=rx is the receive side; direction=tx is the transmit side as reported by the bridged peer.",
+			Help:      "RTP jitter per leg, per perspective. direction=rx is incoming, direction=tx is outgoing. side=local vs side=peer lets operators compare what each end of the bridge measured.",
 			// Buckets chosen for VoIP norms: <30ms inaudible, 30–50ms
 			// noticeable, 50–100ms degraded, >100ms bad.
 			Buckets: []float64{1, 5, 10, 20, 30, 50, 100, 200, 500},
-		}, []string{"direction"}),
+		}, []string{"direction", "side"}),
 
 		lossPercent: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: ns,
 			Subsystem: "call",
 			Name:      "rtp_loss_percent",
-			Help:      "RTP packet loss percentage per leg from cdr.rtpqos. >1% is audible distortion, >5% breaks intelligibility.",
+			Help:      "RTP packet loss percentage per leg, per perspective. >1% is audible distortion, >5% breaks intelligibility.",
 			Buckets:   []float64{0.1, 0.5, 1, 2, 5, 10, 20, 50},
-		}, []string{"direction"}),
+		}, []string{"direction", "side"}),
 
 		mosScore: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: ns,
 			Subsystem: "call",
 			Name:      "rtp_mos_score",
-			Help:      "Mean Opinion Score per leg derived from Asterisk's MES via the ITU-T G.107 R-factor → MOS conversion. Range 1.0–4.5; ≥4.0 is good, <3.1 is bad.",
+			Help:      "Mean Opinion Score per leg, per perspective. Range 1.0–4.5; ≥4.0 is good, <3.1 is bad. Compare side=local vs side=peer to detect asymmetric path issues.",
 			Buckets:   []float64{1, 2, 2.5, 3, 3.1, 3.6, 4, 4.3, 4.5},
-		}, []string{"direction"}),
+		}, []string{"direction", "side"}),
 
-		rttMs: prometheus.NewHistogram(prometheus.HistogramOpts{
+		rttMs: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace: ns,
 			Subsystem: "call",
 			Name:      "rtp_rtt_milliseconds",
-			Help:      "RTP round-trip time per leg from cdr.rtpqos.RTT. >150ms degrades conversational flow, >300ms is borderline unusable.",
+			Help:      "RTP round-trip time per leg, per perspective. >150ms degrades conversational flow, >300ms is borderline unusable. Local and peer should agree closely on RTT — divergence usually means clock skew or one side wasn't actually receiving RTCP.",
 			Buckets:   []float64{10, 25, 50, 100, 150, 200, 300, 500, 1000},
-		}),
+		}, []string{"side"}),
 
 		scrapeRows: prometheus.NewCounter(prometheus.CounterOpts{
 			Namespace: ns,
@@ -177,36 +180,54 @@ func (c *Collector) scrapeOnce() {
 
 func (c *Collector) observe(l *data.CallLeg) {
 	c.scrapeRows.Inc()
-	q := l.RTPQoS
+
+	// Record local-side QoS (CDR(rtpqos) = the channel that ran the
+	// hangup-handler dialplan). Always counted — even when nil — so
+	// asterisk_call_quality_total reflects total call volume.
+	c.recordSide("local", l.RTPQoS)
+
+	// Record peer-side QoS (CDR(peerrtpqos) = the BRIDGEPEER's view).
+	// Only counted when the column is populated — operators who haven't
+	// opted into the dual-perspective dialplan should see no peer-side
+	// observations rather than a flood of UNKNOWN buckets.
+	if l.PeerRTPQoS != nil {
+		c.recordSide("peer", l.PeerRTPQoS)
+	}
+}
+
+// recordSide observes one perspective's RTP stats into the
+// per-side-labelled metrics. q==nil counts as one UNKNOWN call but
+// emits no histogram observations.
+func (c *Collector) recordSide(side string, q *data.RTPQoS) {
 	if q == nil {
-		c.callsByBand.WithLabelValues(string(data.QualityUnknown)).Inc()
+		c.callsByBand.WithLabelValues(string(data.QualityUnknown), side).Inc()
 		return
 	}
-	c.callsByBand.WithLabelValues(string(q.Quality)).Inc()
+	c.callsByBand.WithLabelValues(string(q.Quality), side).Inc()
 
 	// Only record histograms when the underlying RTCP report exists
 	// (zero values mean "not received"). Histogram buckets aren't
 	// meaningful for "no data" — better to keep the count low than
 	// to skew percentiles toward zero.
 	if q.RxJitterMs > 0 {
-		c.jitterMs.WithLabelValues("rx").Observe(q.RxJitterMs)
+		c.jitterMs.WithLabelValues("rx", side).Observe(q.RxJitterMs)
 	}
 	if q.TxJitterMs > 0 {
-		c.jitterMs.WithLabelValues("tx").Observe(q.TxJitterMs)
+		c.jitterMs.WithLabelValues("tx", side).Observe(q.TxJitterMs)
 	}
 	if q.RxLossPercent > 0 || q.RxCount > 0 {
-		c.lossPercent.WithLabelValues("rx").Observe(q.RxLossPercent)
+		c.lossPercent.WithLabelValues("rx", side).Observe(q.RxLossPercent)
 	}
 	if q.TxLossPercent > 0 || q.TxCount > 0 {
-		c.lossPercent.WithLabelValues("tx").Observe(q.TxLossPercent)
+		c.lossPercent.WithLabelValues("tx", side).Observe(q.TxLossPercent)
 	}
 	if q.RxMOS > 0 {
-		c.mosScore.WithLabelValues("rx").Observe(q.RxMOS)
+		c.mosScore.WithLabelValues("rx", side).Observe(q.RxMOS)
 	}
 	if q.TxMOS > 0 {
-		c.mosScore.WithLabelValues("tx").Observe(q.TxMOS)
+		c.mosScore.WithLabelValues("tx", side).Observe(q.TxMOS)
 	}
 	if q.RTTMs > 0 {
-		c.rttMs.Observe(q.RTTMs)
+		c.rttMs.WithLabelValues(side).Observe(q.RTTMs)
 	}
 }
