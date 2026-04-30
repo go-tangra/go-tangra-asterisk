@@ -163,6 +163,7 @@ function destinationSubtitle(s: Call): string {
 }
 
 const legColumns = [
+  { title: 'side', key: 'side', width: 110 },
   { title: 'channel', dataIndex: 'channel', key: 'channel', width: 220 },
   { title: 'extension', dataIndex: 'extension', key: 'extension', width: 100 },
   { title: 'disposition', dataIndex: 'disposition', key: 'disposition', width: 130 },
@@ -211,28 +212,50 @@ interface DisplayLeg {
   sourceLegIndex: number;
 }
 
-// One row per CDR leg. We previously split each row into
-// originator + answerer because we hoped to also capture the bridged
-// peer's independent RTP view via cdr.peerrtpqos — but Asterisk
-// only reliably gives us one perspective per call (whichever of
-// RTPAUDIOQOS / RTPAUDIOQOSBRIDGED is non-empty for the channel
-// running macro-hangupcall). That single blob already encodes BOTH
-// audio directions through its rx*/tx* fields, so the answerer-row
-// split was redundant and just left an empty cell on most calls.
+// One CDR row in FreePBX's default config consolidates a 2-party call
+// into a single row — channel = originator, dstchannel = answerer.
+// With the per-channel hangup_handler dialplan (extensions_override_
+// freepbx.conf), each side now writes its own RTP perspective:
+//   - rtpqos     ← master channel's (originator's) view
+//   - peerrtpqos ← bridged peer's (answerer's) view
+// We split each CDR row into TWO display rows so operators see both
+// channels with their own quality data. Rows are only split when
+// both dstchannel AND peerRtpQos are present — failed/unanswered
+// calls (no dstchannel) and PBXs without the per-channel handler
+// (no peerRtpQos) collapse to a single row cleanly.
 const displayLegs = computed<DisplayLeg[]>(() => {
-  return legs.value.map((leg, idx) => ({
-    uniqueid: leg.uniqueid,
-    channel: leg.channel,
-    extension: leg.extension || extractChannelLabel(leg.channel),
-    disposition: leg.disposition,
-    durationSeconds: leg.durationSeconds,
-    billsecSeconds: leg.billsecSeconds,
-    key: leg.uniqueid,
-    displayIndex: idx + 1,
-    side: 'originator' as const,
-    rtpQos: leg.rtpQos,
-    sourceLegIndex: idx,
-  }));
+  const out: DisplayLeg[] = [];
+  legs.value.forEach((leg, idx) => {
+    out.push({
+      uniqueid: leg.uniqueid,
+      channel: leg.channel,
+      extension: leg.extension || extractChannelLabel(leg.channel),
+      disposition: leg.disposition,
+      durationSeconds: leg.durationSeconds,
+      billsecSeconds: leg.billsecSeconds,
+      key: `${leg.uniqueid}-orig`,
+      displayIndex: out.length + 1,
+      side: 'originator',
+      rtpQos: leg.rtpQos,
+      sourceLegIndex: idx,
+    });
+    if (leg.dstchannel && leg.dstchannel !== leg.channel && leg.peerRtpQos) {
+      out.push({
+        uniqueid: leg.uniqueid,
+        channel: leg.dstchannel,
+        extension: extractChannelLabel(leg.dstchannel),
+        disposition: leg.disposition,
+        durationSeconds: leg.durationSeconds,
+        billsecSeconds: leg.billsecSeconds,
+        key: `${leg.uniqueid}-ans`,
+        displayIndex: out.length + 1,
+        side: 'answerer',
+        rtpQos: leg.peerRtpQos,
+        sourceLegIndex: idx,
+      });
+    }
+  });
+  return out;
 });
 
 function sideTagColor(side: 'originator' | 'answerer'): string {
@@ -480,16 +503,20 @@ const onlineColumns = [
               <Tag :color="qualityColor(callQualitySummary.band)" style="margin-right: 8px">
                 {{ qualityLabel(callQualitySummary.band) }}
               </Tag>
-              Worst direction:
-              <strong>leg {{ callQualitySummary.worstLegIndex + 1 }}</strong>
+              Worst:
+              <strong>row {{ callQualitySummary.worstLegIndex + 1 }}</strong>
+              <span v-if="callQualitySummary.worstSide">
+                · <strong>{{ callQualitySummary.worstSide === 'local' ? 'originator' : 'answerer' }} side</strong>
+              </span>
               ·
               <strong>{{ callQualitySummary.worstDirection === 'rx' ? 'incoming (RX)' : 'outgoing (TX)' }}</strong>
               · MOS {{ callQualitySummary.worstMos.toFixed(2) }}
             </template>
             <template #description>
-              The badges below show both audio directions of the call from one endpoint's perspective:
-              ↓ RX is what this side received, ↑ TX is what the other side reported hearing (via RTCP). A
-              single low score points at one direction's network path.
+              Each row below shows one channel's RTP perspective. ↓ RX is what that channel heard;
+              ↑ TX is what the other end reported hearing (via RTCP). When the originator and answerer
+              rows disagree on the same direction, the difference points at the network path between
+              one specific channel and the bridge — investigate that side.
             </template>
           </Alert>
           <Table
@@ -500,7 +527,10 @@ const onlineColumns = [
             size="small"
           >
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'quality' && record.rtpQos">
+              <template v-if="column.key === 'side'">
+                <Tag :color="sideTagColor(record.side)">{{ record.side }}</Tag>
+              </template>
+              <template v-else-if="column.key === 'quality' && record.rtpQos">
                 <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center">
                   <Tag :color="qualityColor(bandFromMos(record.rtpQos.rxMos))">
                     ↓ RX {{ record.rtpQos.rxMos > 0 ? record.rtpQos.rxMos.toFixed(2) : '—' }}
