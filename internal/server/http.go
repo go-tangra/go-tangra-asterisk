@@ -11,15 +11,17 @@ import (
 	"github.com/go-tangra/go-tangra-asterisk/cmd/server/assets"
 	"github.com/go-tangra/go-tangra-asterisk/internal/calls"
 	"github.com/go-tangra/go-tangra-asterisk/internal/data"
+	"github.com/go-tangra/go-tangra-asterisk/internal/exporter"
 )
 
 // NewHTTPServer serves the embedded Module Federation remote (frontend-dist)
 // plus a couple of metadata endpoints (health, menus, openapi, descriptor),
-// the call-recording streaming endpoint, and the live-call SSE stream.
+// the call-recording streaming endpoint, the live-call SSE stream, and a
+// Prometheus /metrics endpoint when AMI is configured.
 //
 // The admin gateway proxies /modules/asterisk/* to this server, which is how
 // the SPA shell loads the federated remote at runtime.
-func NewHTTPServer(ctx *bootstrap.Context, mysql *data.MySQLClients, registry *calls.Registry) *kratosHttp.Server {
+func NewHTTPServer(ctx *bootstrap.Context, mysql *data.MySQLClients, registry *calls.Registry, cfg *data.Config) *kratosHttp.Server {
 	l := ctx.NewLoggerHelper("asterisk/http")
 
 	addr := os.Getenv("ASTERISK_HTTP_ADDR")
@@ -59,6 +61,14 @@ func NewHTTPServer(ctx *bootstrap.Context, mysql *data.MySQLClients, registry *c
 		streamHandler := NewCallStreamHandler(l, registry)
 		srv.HandlePrefix("/calls/stream", streamHandler)
 		l.Info("Live call SSE stream enabled at /calls/stream")
+	}
+
+	// Prometheus /metrics: vendored from menta2k/freepbx-exporter so
+	// operators don't need to deploy a second process. Same scrape
+	// schema as the standalone exporter.
+	if metrics := exporter.Handler(cfg); metrics != nil {
+		srv.HandlePrefix("/metrics", metrics)
+		l.Info("Prometheus metrics enabled at /metrics")
 	}
 
 	route.GET("/health", func(c kratosHttp.Context) error {

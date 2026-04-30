@@ -33,9 +33,16 @@ Environment=ASTERISK_RECORDINGS_PATH=/var/spool/asterisk/monitor
 
 # Prometheus base URL. When set, the Dashboards submenu in the UI is
 # populated by proxying PromQL queries through this module to the
-# configured Prometheus. Expects metrics from
-# https://github.com/menta2k/freepbx-exporter under the `asterisk_*`
-# namespace. Leave empty to disable the dashboards.
+# configured Prometheus. Expects metrics from the freepbx-exporter
+# scrape under the `asterisk_*` namespace.
+#
+# Since v1.6.0 this module exposes /metrics on its own HTTP port
+# (default 0.0.0.0:9801) — the same schema as menta2k/freepbx-exporter,
+# vendored. Point your Prometheus scrape config at
+# http://<this-host>:9801/metrics and skip deploying a separate
+# exporter process.
+#
+# Leave ASTERISK_PROMETHEUS_URL empty to disable the dashboards UI.
 Environment=ASTERISK_PROMETHEUS_URL=http://127.0.0.1:9090
 
 # mTLS server certs (gRPC server). Paths follow the cert-manager convention
