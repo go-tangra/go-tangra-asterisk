@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -42,6 +43,13 @@ func Handler(cfg *data.Config) http.Handler {
 			Address:  addr,
 			Username: cfg.AMI.Username,
 			Secret:   cfg.AMI.Secret,
+			// MUST be set explicitly. The collector uses cfg.Timeout
+			// for the WHOLE-scrape deadline (context.WithTimeout in
+			// Collector.Collect); the ami.Dial fallback to 10s only
+			// kicks in inside Dial itself, which never runs because
+			// the context is already expired. Leaving this at 0 makes
+			// every scrape fail with "i/o timeout" in microseconds.
+			Timeout: 10 * time.Second,
 		},
 		collector.ScrapeOptions{},
 		slog.Default(),
