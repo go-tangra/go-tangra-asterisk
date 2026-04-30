@@ -431,33 +431,34 @@ function deviceStateColor(state: string, registered: boolean): string {
 }
 
 const extensionRows = computed<ExtensionRow[]>(() => {
-  // Group by extension since the metric carries one series per
-  // (endpoint, device_state) — the value of 1 marks the active state.
-  // Pick the series whose device_state is the current one (value=1),
-  // else the first series so we still show a row with a stale state.
+  // The metric emits one series per (endpoint, device_state). Only the
+  // series whose value is 1 represents the endpoint's current state;
+  // value 0 series are stale snapshots from previous device_states.
+  // We keep only the value=1 series — that's also the registered set
+  // by definition (asterisk_pjsip_endpoint_up=1 means the endpoint is
+  // reachable, i.e. registered).
   const byExt = new Map<string, ExtensionRow>();
   for (const s of snapshot.value.extensions) {
     const ext = s.labels.endpoint;
     if (!ext) continue;
-    const registered = s.hasValue && s.value === 1;
-    const existing = byExt.get(ext);
-    if (existing && !registered) continue;
+    if (!s.hasValue || s.value !== 1) continue;
     byExt.set(ext, {
       key: ext,
       extension: ext,
       displayName: extensionDirectory.value.get(ext) ?? '',
       deviceState: s.labels.device_state || '—',
-      registered,
+      registered: true,
     });
   }
-  return [...byExt.values()].sort((a, b) => a.extension.localeCompare(b.extension, undefined, { numeric: true }));
+  return [...byExt.values()].sort((a, b) =>
+    a.extension.localeCompare(b.extension, undefined, { numeric: true }),
+  );
 });
 
 const extensionColumns = [
   { title: 'Extension', dataIndex: 'extension', key: 'extension', width: 120 },
   { title: 'Name', dataIndex: 'displayName', key: 'displayName' },
   { title: 'State', key: 'state', width: 130 },
-  { title: 'Registered', key: 'registered', width: 110 },
 ];
 
 interface PeerRow {
@@ -764,7 +765,11 @@ function formatCallDuration(seconds: number): string {
         </Col>
       </Row>
 
-      <Card title="Extensions" size="small" style="margin-bottom: 16px">
+      <Card
+        :title="`Registered extensions (${extensionRows.length})`"
+        size="small"
+        style="margin-bottom: 16px"
+      >
         <Table
           v-if="extensionRows.length > 0"
           :columns="extensionColumns"
@@ -778,14 +783,9 @@ function formatCallDuration(seconds: number): string {
                 {{ record.deviceState }}
               </Tag>
             </template>
-            <template v-else-if="column.key === 'registered'">
-              <Tag :color="record.registered ? '#52C41A' : '#FF4D4F'">
-                {{ record.registered ? 'Yes' : 'No' }}
-              </Tag>
-            </template>
           </template>
         </Table>
-        <Empty v-else description="No extensions reported" />
+        <Empty v-else description="No registered extensions" />
       </Card>
 
       <Row :gutter="16" style="margin-bottom: 16px">
