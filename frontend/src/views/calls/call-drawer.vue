@@ -163,14 +163,94 @@ function destinationSubtitle(s: Call): string {
 }
 
 const legColumns = [
+  { title: '#', dataIndex: 'displayIndex', key: 'displayIndex', width: 50 },
+  { title: 'side', key: 'side', width: 110 },
   { title: 'channel', dataIndex: 'channel', key: 'channel', width: 220 },
-  { title: 'dstchannel', dataIndex: 'dstchannel', key: 'dstchannel', width: 220 },
   { title: 'extension', dataIndex: 'extension', key: 'extension', width: 100 },
   { title: 'disposition', dataIndex: 'disposition', key: 'disposition', width: 130 },
   { title: 'duration', dataIndex: 'durationSeconds', key: 'durationSeconds', width: 90 },
   { title: 'billsec', dataIndex: 'billsecSeconds', key: 'billsecSeconds', width: 90 },
   { title: 'quality', key: 'quality', width: 280 },
 ];
+
+// Parse a PJSIP/Local/SIP channel name down to the extension/peer
+// label — same logic the backend uses, replicated client-side so we
+// don't need a round-trip just to label the row.
+function extractChannelLabel(ch: string | undefined): string {
+  if (!ch) return '';
+  // 'PJSIP/22-0000000c' → '22'    'PJSIP/ITD-0000000d' → 'ITD'
+  // 'Local/600@from-internal-...' → '600'
+  const m = /^[A-Za-z]+\/([^-@/]+)/.exec(ch);
+  return m ? m[1] : ch;
+}
+
+// One CDR row in FreePBX's default config consolidates a 2-party call
+// into a single row — channel = originator, dstchannel = answerer,
+// rtpqos = originator's view, peerrtpqos = answerer's view.
+//
+// Operators want to see this as TWO rows in the legs table, one per
+// side, each carrying the perspective of the channel that recorded
+// it. We split here in the frontend so the underlying CDR API stays
+// unchanged.
+//
+// Failed/unanswered calls (no dstchannel) fall through unsplit.
+interface DisplayLeg {
+  // Underlying CallLeg fields, copied through so the bodyCell template
+  // doesn't need to special-case anything.
+  uniqueid: string;
+  channel: string;
+  extension: string;
+  disposition: string;
+  durationSeconds: number;
+  billsecSeconds: number;
+  // Display extras.
+  key: string;
+  displayIndex: number;
+  side: 'originator' | 'answerer';
+  rtpQos?: RTPQoS;
+  // Map back to the source CDR leg index so callQualitySummary can
+  // reference 'leg 1 originator' instead of 'leg 1.5'.
+  sourceLegIndex: number;
+}
+
+const displayLegs = computed<DisplayLeg[]>(() => {
+  const out: DisplayLeg[] = [];
+  legs.value.forEach((leg, idx) => {
+    out.push({
+      uniqueid: leg.uniqueid,
+      channel: leg.channel,
+      extension: extractChannelLabel(leg.channel),
+      disposition: leg.disposition,
+      durationSeconds: leg.durationSeconds,
+      billsecSeconds: leg.billsecSeconds,
+      key: `${leg.uniqueid}-orig`,
+      displayIndex: out.length + 1,
+      side: 'originator',
+      rtpQos: leg.rtpQos,
+      sourceLegIndex: idx,
+    });
+    if (leg.dstchannel && leg.dstchannel !== leg.channel) {
+      out.push({
+        uniqueid: leg.uniqueid,
+        channel: leg.dstchannel,
+        extension: extractChannelLabel(leg.dstchannel),
+        disposition: leg.disposition,
+        durationSeconds: leg.durationSeconds,
+        billsecSeconds: leg.billsecSeconds,
+        key: `${leg.uniqueid}-ans`,
+        displayIndex: out.length + 1,
+        side: 'answerer',
+        rtpQos: leg.peerRtpQos,
+        sourceLegIndex: idx,
+      });
+    }
+  });
+  return out;
+});
+
+function sideTagColor(side: 'originator' | 'answerer'): string {
+  return side === 'originator' ? '#1890FF' : '#722ED1';
+}
 
 // Quality colour palette — one shared definition so the per-direction
 // badges (↓ rx / ↑ tx) and the overall worst-band tag agree.
@@ -238,33 +318,32 @@ interface CallQualitySummary {
   worstMos: number;
 }
 
+// Walks the SAME displayLegs the table renders, so 'leg N' in the
+// banner matches the row number the operator sees. Each display row
+// already represents one side (originator/answerer), so we no longer
+// need the old worstSide field — the row label is the side.
 const callQualitySummary = computed<CallQualitySummary | null>(() => {
   let worst: CallQualitySummary | null = null;
-  legs.value.forEach((leg, idx) => {
-    const sides: { side: 'local' | 'peer'; q: RTPQoS | undefined }[] = [
-      { side: 'local', q: leg.rtpQos },
-      { side: 'peer', q: leg.peerRtpQos },
+  for (const dl of displayLegs.value) {
+    const q = dl.rtpQos;
+    if (!q) continue;
+    const candidates: { mos: number; dir: 'rx' | 'tx' }[] = [
+      { mos: q.rxMos, dir: 'rx' },
+      { mos: q.txMos, dir: 'tx' },
     ];
-    for (const { side, q } of sides) {
-      if (!q) continue;
-      const candidates: { mos: number; dir: 'rx' | 'tx' }[] = [
-        { mos: q.rxMos, dir: 'rx' },
-        { mos: q.txMos, dir: 'tx' },
-      ];
-      for (const c of candidates) {
-        if (c.mos <= 0) continue;
-        if (!worst || c.mos < worst.worstMos) {
-          worst = {
-            band: bandFromMos(c.mos),
-            worstLegIndex: idx,
-            worstSide: side,
-            worstDirection: c.dir,
-            worstMos: c.mos,
-          };
-        }
+    for (const c of candidates) {
+      if (c.mos <= 0) continue;
+      if (!worst || c.mos < worst.worstMos) {
+        worst = {
+          band: bandFromMos(c.mos),
+          worstLegIndex: dl.displayIndex - 1, // back to 0-based for the +1 in the template
+          worstSide: dl.side === 'originator' ? 'local' : 'peer',
+          worstDirection: c.dir,
+          worstMos: c.mos,
+        };
       }
     }
-  });
+  }
   return worst;
 });
 
@@ -435,86 +514,45 @@ const onlineColumns = [
           </Alert>
           <Table
             :columns="legColumns"
-            :data-source="legs"
+            :data-source="displayLegs"
             :pagination="false"
-            row-key="uniqueid"
+            row-key="key"
             size="small"
           >
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'quality' && (record.rtpQos || record.peerRtpQos)">
-                <div style="display: flex; flex-direction: column; gap: 6px">
-                  <div
-                    v-if="record.rtpQos"
-                    style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center"
+              <template v-if="column.key === 'side'">
+                <Tag :color="sideTagColor(record.side)">{{ record.side }}</Tag>
+              </template>
+              <template v-else-if="column.key === 'quality' && record.rtpQos">
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center">
+                  <Tag :color="qualityColor(bandFromMos(record.rtpQos.rxMos))">
+                    ↓ RX {{ record.rtpQos.rxMos > 0 ? record.rtpQos.rxMos.toFixed(2) : '—' }}
+                  </Tag>
+                  <Tag :color="qualityColor(bandFromMos(record.rtpQos.txMos))">
+                    ↑ TX {{ record.rtpQos.txMos > 0 ? record.rtpQos.txMos.toFixed(2) : '—' }}
+                  </Tag>
+                  <span
+                    v-if="record.rtpQos.rxLossPercent + record.rtpQos.txLossPercent > 0"
+                    :style="{
+                      fontSize: '11px',
+                      color: (record.rtpQos.rxLossPercent + record.rtpQos.txLossPercent) > 2
+                        ? 'var(--ant-color-error)'
+                        : 'var(--ant-color-text-secondary)',
+                    }"
                   >
-                    <span style="font-size: 11px; color: var(--ant-color-text-secondary); min-width: 40px">
-                      local
-                    </span>
-                    <Tag :color="qualityColor(bandFromMos(record.rtpQos.rxMos))">
-                      ↓ RX {{ record.rtpQos.rxMos > 0 ? record.rtpQos.rxMos.toFixed(2) : '—' }}
-                    </Tag>
-                    <Tag :color="qualityColor(bandFromMos(record.rtpQos.txMos))">
-                      ↑ TX {{ record.rtpQos.txMos > 0 ? record.rtpQos.txMos.toFixed(2) : '—' }}
-                    </Tag>
-                    <span
-                      v-if="record.rtpQos.rxLossPercent + record.rtpQos.txLossPercent > 0"
-                      :style="{
-                        fontSize: '11px',
-                        color: (record.rtpQos.rxLossPercent + record.rtpQos.txLossPercent) > 2
-                          ? 'var(--ant-color-error)'
-                          : 'var(--ant-color-text-secondary)',
-                      }"
-                    >
-                      loss rx {{ record.rtpQos.rxLossPercent.toFixed(1) }}% / tx {{ record.rtpQos.txLossPercent.toFixed(1) }}%
-                    </span>
-                    <span
-                      v-if="record.rtpQos.rttMs > 0"
-                      :style="{
-                        fontSize: '11px',
-                        color: record.rtpQos.rttMs > 200
-                          ? 'var(--ant-color-error)'
-                          : 'var(--ant-color-text-secondary)',
-                      }"
-                    >
-                      rtt {{ record.rtpQos.rttMs.toFixed(0) }}ms
-                    </span>
-                  </div>
-                  <div
-                    v-if="record.peerRtpQos"
-                    style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center"
+                    loss rx {{ record.rtpQos.rxLossPercent.toFixed(1) }}% / tx {{ record.rtpQos.txLossPercent.toFixed(1) }}%
+                  </span>
+                  <span
+                    v-if="record.rtpQos.rttMs > 0"
+                    :style="{
+                      fontSize: '11px',
+                      color: record.rtpQos.rttMs > 200
+                        ? 'var(--ant-color-error)'
+                        : 'var(--ant-color-text-secondary)',
+                    }"
                   >
-                    <span style="font-size: 11px; color: var(--ant-color-text-secondary); min-width: 40px">
-                      peer
-                    </span>
-                    <Tag :color="qualityColor(bandFromMos(record.peerRtpQos.rxMos))">
-                      ↓ RX {{ record.peerRtpQos.rxMos > 0 ? record.peerRtpQos.rxMos.toFixed(2) : '—' }}
-                    </Tag>
-                    <Tag :color="qualityColor(bandFromMos(record.peerRtpQos.txMos))">
-                      ↑ TX {{ record.peerRtpQos.txMos > 0 ? record.peerRtpQos.txMos.toFixed(2) : '—' }}
-                    </Tag>
-                    <span
-                      v-if="record.peerRtpQos.rxLossPercent + record.peerRtpQos.txLossPercent > 0"
-                      :style="{
-                        fontSize: '11px',
-                        color: (record.peerRtpQos.rxLossPercent + record.peerRtpQos.txLossPercent) > 2
-                          ? 'var(--ant-color-error)'
-                          : 'var(--ant-color-text-secondary)',
-                      }"
-                    >
-                      loss rx {{ record.peerRtpQos.rxLossPercent.toFixed(1) }}% / tx {{ record.peerRtpQos.txLossPercent.toFixed(1) }}%
-                    </span>
-                    <span
-                      v-if="record.peerRtpQos.rttMs > 0"
-                      :style="{
-                        fontSize: '11px',
-                        color: record.peerRtpQos.rttMs > 200
-                          ? 'var(--ant-color-error)'
-                          : 'var(--ant-color-text-secondary)',
-                      }"
-                    >
-                      rtt {{ record.peerRtpQos.rttMs.toFixed(0) }}ms
-                    </span>
-                  </div>
+                    rtt {{ record.rtpQos.rttMs.toFixed(0) }}ms
+                  </span>
                 </div>
               </template>
               <template v-else-if="column.key === 'quality'">
