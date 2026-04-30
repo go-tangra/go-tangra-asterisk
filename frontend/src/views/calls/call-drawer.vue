@@ -163,14 +163,12 @@ function destinationSubtitle(s: Call): string {
 }
 
 const legColumns = [
-  { title: '#', dataIndex: 'displayIndex', key: 'displayIndex', width: 50 },
-  { title: 'side', key: 'side', width: 110 },
   { title: 'channel', dataIndex: 'channel', key: 'channel', width: 220 },
   { title: 'extension', dataIndex: 'extension', key: 'extension', width: 100 },
   { title: 'disposition', dataIndex: 'disposition', key: 'disposition', width: 130 },
   { title: 'duration', dataIndex: 'durationSeconds', key: 'durationSeconds', width: 90 },
   { title: 'billsec', dataIndex: 'billsecSeconds', key: 'billsecSeconds', width: 90 },
-  { title: 'quality', key: 'quality', width: 280 },
+  { title: 'quality', key: 'quality', width: 320 },
 ];
 
 // Parse a PJSIP/Local/SIP channel name down to the extension/peer
@@ -213,39 +211,28 @@ interface DisplayLeg {
   sourceLegIndex: number;
 }
 
+// One row per CDR leg. We previously split each row into
+// originator + answerer because we hoped to also capture the bridged
+// peer's independent RTP view via cdr.peerrtpqos — but Asterisk
+// only reliably gives us one perspective per call (whichever of
+// RTPAUDIOQOS / RTPAUDIOQOSBRIDGED is non-empty for the channel
+// running macro-hangupcall). That single blob already encodes BOTH
+// audio directions through its rx*/tx* fields, so the answerer-row
+// split was redundant and just left an empty cell on most calls.
 const displayLegs = computed<DisplayLeg[]>(() => {
-  const out: DisplayLeg[] = [];
-  legs.value.forEach((leg, idx) => {
-    out.push({
-      uniqueid: leg.uniqueid,
-      channel: leg.channel,
-      extension: extractChannelLabel(leg.channel),
-      disposition: leg.disposition,
-      durationSeconds: leg.durationSeconds,
-      billsecSeconds: leg.billsecSeconds,
-      key: `${leg.uniqueid}-orig`,
-      displayIndex: out.length + 1,
-      side: 'originator',
-      rtpQos: leg.rtpQos,
-      sourceLegIndex: idx,
-    });
-    if (leg.dstchannel && leg.dstchannel !== leg.channel) {
-      out.push({
-        uniqueid: leg.uniqueid,
-        channel: leg.dstchannel,
-        extension: extractChannelLabel(leg.dstchannel),
-        disposition: leg.disposition,
-        durationSeconds: leg.durationSeconds,
-        billsecSeconds: leg.billsecSeconds,
-        key: `${leg.uniqueid}-ans`,
-        displayIndex: out.length + 1,
-        side: 'answerer',
-        rtpQos: leg.peerRtpQos,
-        sourceLegIndex: idx,
-      });
-    }
-  });
-  return out;
+  return legs.value.map((leg, idx) => ({
+    uniqueid: leg.uniqueid,
+    channel: leg.channel,
+    extension: leg.extension || extractChannelLabel(leg.channel),
+    disposition: leg.disposition,
+    durationSeconds: leg.durationSeconds,
+    billsecSeconds: leg.billsecSeconds,
+    key: leg.uniqueid,
+    displayIndex: idx + 1,
+    side: 'originator' as const,
+    rtpQos: leg.rtpQos,
+    sourceLegIndex: idx,
+  }));
 });
 
 function sideTagColor(side: 'originator' | 'answerer'): string {
@@ -493,23 +480,16 @@ const onlineColumns = [
               <Tag :color="qualityColor(callQualitySummary.band)" style="margin-right: 8px">
                 {{ qualityLabel(callQualitySummary.band) }}
               </Tag>
-              Worst:
+              Worst direction:
               <strong>leg {{ callQualitySummary.worstLegIndex + 1 }}</strong>
-              ·
-              <strong>{{ callQualitySummary.worstSide }} side</strong>
               ·
               <strong>{{ callQualitySummary.worstDirection === 'rx' ? 'incoming (RX)' : 'outgoing (TX)' }}</strong>
               · MOS {{ callQualitySummary.worstMos.toFixed(2) }}
             </template>
             <template #description>
-              <span v-if="callQualitySummary.worstSide === 'local'">
-                The local channel reported this issue. If the peer side is green for the same direction, the
-                problem is on the local network path — the peer didn't see it.
-              </span>
-              <span v-else>
-                The bridged peer reported this issue from its end. If the local side is green, the problem is
-                between the bridge and the peer (e.g. trunk's network) — the local channel didn't see it.
-              </span>
+              The badges below show both audio directions of the call from one endpoint's perspective:
+              ↓ RX is what this side received, ↑ TX is what the other side reported hearing (via RTCP). A
+              single low score points at one direction's network path.
             </template>
           </Alert>
           <Table
@@ -520,10 +500,7 @@ const onlineColumns = [
             size="small"
           >
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'side'">
-                <Tag :color="sideTagColor(record.side)">{{ record.side }}</Tag>
-              </template>
-              <template v-else-if="column.key === 'quality' && record.rtpQos">
+              <template v-if="column.key === 'quality' && record.rtpQos">
                 <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center">
                   <Tag :color="qualityColor(bandFromMos(record.rtpQos.rxMos))">
                     ↓ RX {{ record.rtpQos.rxMos > 0 ? record.rtpQos.rxMos.toFixed(2) : '—' }}
