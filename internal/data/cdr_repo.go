@@ -319,16 +319,23 @@ func (r *CdrRepo) ListLegsWithQoSSince(ctx context.Context, since time.Time) ([]
 	ctx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
 
-	const q = `
-		SELECT calldate, channel, dstchannel, disposition,
-		       duration, billsec, rtpqos
-		FROM cdr
+	// Mirror queryLegsWithQoS: dynamic SELECT picks up peerrtpqos when
+	// the optional column exists. Filter only requires the master-side
+	// rtpqos to be non-empty — peerrtpqos may legitimately be empty
+	// for failed/unanswered/single-leg calls and we still want to
+	// count those toward asterisk_call_quality_total.
+	cols := "calldate, channel, dstchannel, disposition," +
+		" duration, billsec, rtpqos"
+	if r.peerRTPQoSAvailable {
+		cols += ", peerrtpqos"
+	}
+	q := "SELECT " + cols + ` FROM cdr
 		WHERE calldate > ?
 		  AND rtpqos IS NOT NULL
 		  AND rtpqos <> ''
 		ORDER BY calldate ASC
-		LIMIT 1000
-	`
+		LIMIT 1000`
+
 	rows, err := r.mysql.Cdr.QueryContext(ctx, q, since)
 	if err != nil {
 		return nil, fmt.Errorf("list legs with qos since %s: %w", since, err)
@@ -338,12 +345,19 @@ func (r *CdrRepo) ListLegsWithQoSSince(ctx context.Context, since time.Time) ([]
 	out := make([]CallLeg, 0, 64)
 	for rows.Next() {
 		var l CallLeg
-		var rtpqos sql.NullString
-		if err := rows.Scan(
+		var rtpqos, peerrtpqos sql.NullString
+		targets := []any{
 			&l.CallDate, &l.Channel, &l.Dstchannel, &l.Disposition,
 			&l.DurationSeconds, &l.BillsecSeconds, &rtpqos,
-		); err != nil {
+		}
+		if r.peerRTPQoSAvailable {
+			targets = append(targets, &peerrtpqos)
+		}
+		if err := rows.Scan(targets...); err != nil {
 			return nil, fmt.Errorf("scan leg: %w", err)
+		}
+		if peerrtpqos.Valid {
+			l.PeerRTPQoS = ParseRTPQoS(peerrtpqos.String)
 		}
 		if rtpqos.Valid {
 			l.RTPQoS = ParseRTPQoS(rtpqos.String)
