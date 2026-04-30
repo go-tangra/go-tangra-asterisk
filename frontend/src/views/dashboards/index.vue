@@ -50,15 +50,28 @@ const RANGE_WINDOW_MS = 60 * 60 * 1000;
 const RANGE_STEP_SECONDS = 60;
 
 // Quality metrics — rolled up over the last hour by Prometheus.
-interface QualitySnapshot {
-  callsTotal: number;          // increase(asterisk_call_quality_total[1h])
-  callsByBand: Record<string, number>;
-  badPercent: number;          // BAD+POOR as % of total
+// Per-side rollup. Both sides answer the same question
+// ("how does the LOCAL channel see this call vs how does the PEER
+//  see this call") so we keep the same shape and let the template
+// render a side-by-side comparison.
+interface QualitySide {
   rxMosP50: number;
   txMosP50: number;
   rttMsP95: number;
   jitterRxMsP95: number;
   jitterTxMsP95: number;
+}
+
+interface QualitySnapshot {
+  callsTotal: number;          // increase(asterisk_call_quality_total[1h]), local side
+  callsByBand: Record<string, number>;
+  badPercent: number;          // BAD+POOR as % of total
+  local: QualitySide;
+  peer: QualitySide;
+  // True when at least one peer-side observation exists in the window.
+  // The Local-vs-Peer panel hides until this flips on, so PBXs that
+  // haven't enabled cdr.peerrtpqos don't see an empty comparison.
+  hasPeerData: boolean;
 }
 
 interface DashboardSnapshot {
@@ -256,6 +269,11 @@ function buildQualitySnapshot(
   rttP95: InstantSample[],
   jitterRx: InstantSample[],
   jitterTx: InstantSample[],
+  peerRxMos: InstantSample[],
+  peerTxMos: InstantSample[],
+  peerRttP95: InstantSample[],
+  peerJitterRx: InstantSample[],
+  peerJitterTx: InstantSample[],
 ): QualitySnapshot | null {
   // The counter is now labelled by both band AND side. Total calls
   // is the local side only (peer is the same calls, just from the
@@ -276,15 +294,35 @@ function buildQualitySnapshot(
   // zeros until Prometheus has accumulated data. Silently hiding it
   // makes operators think the feature isn't deployed when really
   // they just need to wait one hour for increase()/rate() windows.
+  // Peer side has data when at least one of the peer-side
+  // observations resolves to a number.
+  const peerSeen = [
+    firstScalar(peerRxMos),
+    firstScalar(peerTxMos),
+    firstScalar(peerRttP95),
+    firstScalar(peerJitterRx),
+    firstScalar(peerJitterTx),
+  ].some((v) => v != null && v > 0);
+
   return {
     callsTotal: total,
     callsByBand: bands,
     badPercent: total > 0 ? (100 * bad) / total : 0,
-    rxMosP50: firstScalar(rxMos) ?? 0,
-    txMosP50: firstScalar(txMos) ?? 0,
-    rttMsP95: firstScalar(rttP95) ?? 0,
-    jitterRxMsP95: firstScalar(jitterRx) ?? 0,
-    jitterTxMsP95: firstScalar(jitterTx) ?? 0,
+    local: {
+      rxMosP50: firstScalar(rxMos) ?? 0,
+      txMosP50: firstScalar(txMos) ?? 0,
+      rttMsP95: firstScalar(rttP95) ?? 0,
+      jitterRxMsP95: firstScalar(jitterRx) ?? 0,
+      jitterTxMsP95: firstScalar(jitterTx) ?? 0,
+    },
+    peer: {
+      rxMosP50: firstScalar(peerRxMos) ?? 0,
+      txMosP50: firstScalar(peerTxMos) ?? 0,
+      rttMsP95: firstScalar(peerRttP95) ?? 0,
+      jitterRxMsP95: firstScalar(peerJitterRx) ?? 0,
+      jitterTxMsP95: firstScalar(peerJitterTx) ?? 0,
+    },
+    hasPeerData: peerSeen,
   };
 }
 
@@ -313,11 +351,18 @@ async function refresh(): Promise<void> {
       // the values are window-stable across scrapes — the underlying
       // counters/histograms are process-wide cumulative.
       callsByBand,
+      // local-side stats
       rxMosP50,
       txMosP50,
       rttMsP95,
       jitterRxMsP95,
       jitterTxMsP95,
+      // peer-side stats — same queries with side="peer"
+      peerRxMosP50,
+      peerTxMosP50,
+      peerRttMsP95,
+      peerJitterRxMsP95,
+      peerJitterTxMsP95,
     ] = await Promise.all([
       instant('asterisk_up'),
       instant('asterisk_uptime_seconds'),
@@ -351,6 +396,11 @@ async function refresh(): Promise<void> {
       instant('histogram_quantile(0.95, sum by (le) (rate(asterisk_call_rtp_rtt_milliseconds_bucket{side="local"}[1h])))'),
       instant('histogram_quantile(0.95, sum by (le) (rate(asterisk_call_rtp_jitter_milliseconds_bucket{direction="rx",side="local"}[1h])))'),
       instant('histogram_quantile(0.95, sum by (le) (rate(asterisk_call_rtp_jitter_milliseconds_bucket{direction="tx",side="local"}[1h])))'),
+      instant('histogram_quantile(0.5, sum by (le) (rate(asterisk_call_rtp_mos_score_bucket{direction="rx",side="peer"}[1h])))'),
+      instant('histogram_quantile(0.5, sum by (le) (rate(asterisk_call_rtp_mos_score_bucket{direction="tx",side="peer"}[1h])))'),
+      instant('histogram_quantile(0.95, sum by (le) (rate(asterisk_call_rtp_rtt_milliseconds_bucket{side="peer"}[1h])))'),
+      instant('histogram_quantile(0.95, sum by (le) (rate(asterisk_call_rtp_jitter_milliseconds_bucket{direction="rx",side="peer"}[1h])))'),
+      instant('histogram_quantile(0.95, sum by (le) (rate(asterisk_call_rtp_jitter_milliseconds_bucket{direction="tx",side="peer"}[1h])))'),
     ]);
 
     snapshot.value = {
@@ -368,7 +418,11 @@ async function refresh(): Promise<void> {
       queueCompleted,
       queueAbandoned,
       queueMembers,
-      quality: buildQualitySnapshot(callsByBand, rxMosP50, txMosP50, rttMsP95, jitterRxMsP95, jitterTxMsP95),
+      quality: buildQualitySnapshot(
+        callsByBand,
+        rxMosP50, txMosP50, rttMsP95, jitterRxMsP95, jitterTxMsP95,
+        peerRxMosP50, peerTxMosP50, peerRttMsP95, peerJitterRxMsP95, peerJitterTxMsP95,
+      ),
     };
     callsSeries.value = callsRange;
     registeredExtensionsSeries.value = registeredExtensionsRange;
@@ -650,6 +704,118 @@ function qualityBandColor(band: string): string {
     default:          return '#999999';
   }
 }
+
+// ---- Local vs Peer comparison table ------------------------------
+
+interface ComparisonRow {
+  key: string;
+  metric: string;
+  formatted: { local: string; peer: string };
+  severityColor: { local: string; peer: string };
+  deltaText: string;
+  // 'major'/'minor'/'none' — drives the delta tag colour. Major
+  // means the divergence between sides is large enough to be a
+  // diagnostic signal (one side healthy, other side degraded).
+  deltaSignal: 'major' | 'minor' | 'none';
+}
+
+const comparisonColumns = [
+  { title: 'Metric', dataIndex: 'metric', key: 'metric', width: 220 },
+  { title: 'Local', key: 'local', width: 120 },
+  { title: 'Peer',  key: 'peer',  width: 120 },
+  { title: 'Δ',     key: 'delta' },
+];
+
+// Format helpers for the comparison rows. Empty/zero observations
+// render as em-dash so operators don't compare 0ms ←→ 0ms and think
+// it's healthy when really there's no data.
+function fmtMs(v: number): string {
+  return v > 0 ? `${v.toFixed(0)} ms` : '—';
+}
+function fmtMos(v: number): string {
+  return v > 0 ? v.toFixed(2) : '—';
+}
+
+// Delta classification — tuned for diagnostic relevance, not raw
+// arithmetic. A 50ms delta on jitter matters; a 0.05 delta on MOS
+// doesn't.
+function classifyDelta(local: number, peer: number, kind: 'mos' | 'ms'): {
+  deltaText: string;
+  deltaSignal: 'major' | 'minor' | 'none';
+} {
+  if (local <= 0 || peer <= 0) {
+    return { deltaText: '—', deltaSignal: 'none' };
+  }
+  const diff = peer - local;
+  const abs = Math.abs(diff);
+  const sign = diff >= 0 ? '+' : '−';
+  if (kind === 'mos') {
+    const text = `${sign}${abs.toFixed(2)}`;
+    if (abs >= 0.5) return { deltaText: text, deltaSignal: 'major' };
+    if (abs >= 0.2) return { deltaText: text, deltaSignal: 'minor' };
+    return { deltaText: text, deltaSignal: 'none' };
+  }
+  // 'ms' (jitter / RTT)
+  const text = `${sign}${abs.toFixed(0)} ms`;
+  if (abs >= 50) return { deltaText: text, deltaSignal: 'major' };
+  if (abs >= 20) return { deltaText: text, deltaSignal: 'minor' };
+  return { deltaText: text, deltaSignal: 'none' };
+}
+
+const comparisonRows = computed<ComparisonRow[]>(() => {
+  const q = snapshot.value.quality;
+  if (!q) return [];
+  const rows: ComparisonRow[] = [];
+
+  const mosRow = (
+    label: string,
+    localMos: number,
+    peerMos: number,
+  ): ComparisonRow => ({
+    key: label,
+    metric: label,
+    formatted: { local: fmtMos(localMos), peer: fmtMos(peerMos) },
+    severityColor: {
+      local: localMos > 0 ? mosColor(localMos) : 'var(--ant-color-text-disabled)',
+      peer:  peerMos  > 0 ? mosColor(peerMos)  : 'var(--ant-color-text-disabled)',
+    },
+    ...classifyDelta(localMos, peerMos, 'mos'),
+  });
+
+  const msRow = (
+    label: string,
+    localMs: number,
+    peerMs: number,
+    badThreshold: number,
+  ): ComparisonRow => {
+    const colorFor = (v: number) =>
+      v <= 0
+        ? 'var(--ant-color-text-disabled)'
+        : v > badThreshold
+          ? 'var(--ant-color-error)'
+          : 'var(--ant-color-text)';
+    return {
+      key: label,
+      metric: label,
+      formatted: { local: fmtMs(localMs), peer: fmtMs(peerMs) },
+      severityColor: { local: colorFor(localMs), peer: colorFor(peerMs) },
+      ...classifyDelta(localMs, peerMs, 'ms'),
+    };
+  };
+
+  rows.push(mosRow('MOS rx (p50)', q.local.rxMosP50, q.peer.rxMosP50));
+  rows.push(mosRow('MOS tx (p50)', q.local.txMosP50, q.peer.txMosP50));
+  rows.push(msRow('Jitter rx (p95)', q.local.jitterRxMsP95, q.peer.jitterRxMsP95, 30));
+  rows.push(msRow('Jitter tx (p95)', q.local.jitterTxMsP95, q.peer.jitterTxMsP95, 30));
+  rows.push(msRow('RTT (p95)',       q.local.rttMsP95,      q.peer.rttMsP95,      150));
+
+  // Helper rows that decode the delta tag's diagnostic meaning,
+  // separately classifying each delta so the operator can map the
+  // pattern to a specific network path. Helpers don't repeat the
+  // metric value — just the classification.
+  // (Kept as columns above; this comment is for posterity.)
+  return rows;
+});
 
 const peerLatencyColumns = [
   { title: 'Extension', dataIndex: 'peer', key: 'peer', width: 120 },
@@ -967,15 +1133,15 @@ function formatCallDuration(seconds: number): string {
           <Col :span="6">
             <Statistic
               title="MOS rx (p50)"
-              :value="snapshot.quality.rxMosP50 > 0 ? snapshot.quality.rxMosP50.toFixed(2) : '—'"
-              :value-style="{ color: mosColor(snapshot.quality.rxMosP50) }"
+              :value="snapshot.quality.local.rxMosP50 > 0 ? snapshot.quality.local.rxMosP50.toFixed(2) : '—'"
+              :value-style="{ color: mosColor(snapshot.quality.local.rxMosP50) }"
             />
           </Col>
           <Col :span="6">
             <Statistic
               title="MOS tx (p50)"
-              :value="snapshot.quality.txMosP50 > 0 ? snapshot.quality.txMosP50.toFixed(2) : '—'"
-              :value-style="{ color: mosColor(snapshot.quality.txMosP50) }"
+              :value="snapshot.quality.local.txMosP50 > 0 ? snapshot.quality.local.txMosP50.toFixed(2) : '—'"
+              :value-style="{ color: mosColor(snapshot.quality.local.txMosP50) }"
             />
           </Col>
         </Row>
@@ -983,19 +1149,19 @@ function formatCallDuration(seconds: number): string {
           <Col :span="8">
             <Statistic
               title="Jitter rx (p95)"
-              :value="snapshot.quality.jitterRxMsP95 > 0 ? `${snapshot.quality.jitterRxMsP95.toFixed(0)} ms` : '—'"
+              :value="snapshot.quality.local.jitterRxMsP95 > 0 ? `${snapshot.quality.local.jitterRxMsP95.toFixed(0)} ms` : '—'"
             />
           </Col>
           <Col :span="8">
             <Statistic
               title="Jitter tx (p95)"
-              :value="snapshot.quality.jitterTxMsP95 > 0 ? `${snapshot.quality.jitterTxMsP95.toFixed(0)} ms` : '—'"
+              :value="snapshot.quality.local.jitterTxMsP95 > 0 ? `${snapshot.quality.local.jitterTxMsP95.toFixed(0)} ms` : '—'"
             />
           </Col>
           <Col :span="8">
             <Statistic
               title="RTT (p95)"
-              :value="snapshot.quality.rttMsP95 > 0 ? `${snapshot.quality.rttMsP95.toFixed(0)} ms` : '—'"
+              :value="snapshot.quality.local.rttMsP95 > 0 ? `${snapshot.quality.local.rttMsP95.toFixed(0)} ms` : '—'"
             />
           </Col>
         </Row>
@@ -1008,6 +1174,50 @@ function formatCallDuration(seconds: number): string {
             {{ band }}: {{ Math.round(snapshot.quality.callsByBand[band] ?? 0) }}
           </Tag>
         </div>
+      </Card>
+
+      <Card
+        v-if="snapshot.quality && snapshot.quality.hasPeerData"
+        title="Local vs Peer (last 1h)"
+        size="small"
+        style="margin-bottom: 16px"
+      >
+        <p style="margin: 0 0 12px 0; color: var(--ant-color-text-secondary); font-size: 12px">
+          Same calls observed from each end of the bridge. Divergent values point at one-sided network
+          issues — e.g. peer jitter ≫ local jitter usually means the trunk's path is the problem.
+        </p>
+        <Table
+          :columns="comparisonColumns"
+          :data-source="comparisonRows"
+          :pagination="false"
+          row-key="metric"
+          size="small"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'local' || column.key === 'peer'">
+              <span :style="{ color: record.severityColor[column.key], fontWeight: 500 }">
+                {{ record.formatted[column.key] }}
+              </span>
+            </template>
+            <template v-else-if="column.key === 'delta'">
+              <Tag
+                v-if="record.deltaSignal === 'major'"
+                color="#FF4D4F"
+              >
+                Δ {{ record.deltaText }}
+              </Tag>
+              <Tag
+                v-else-if="record.deltaSignal === 'minor'"
+                color="#FAAD14"
+              >
+                Δ {{ record.deltaText }}
+              </Tag>
+              <span v-else style="color: var(--ant-color-text-secondary)">
+                Δ {{ record.deltaText }}
+              </span>
+            </template>
+          </template>
+        </Table>
       </Card>
 
       <Card title="Scrape health" size="small">
