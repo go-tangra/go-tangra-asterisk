@@ -4,7 +4,7 @@ import { computed, ref, watch } from 'vue';
 import { useVbenDrawer } from 'shell/vben/common-ui';
 import { $t } from 'shell/locales';
 
-import { Card, Descriptions, DescriptionsItem, Tag, Table, Tabs, TabPane, Spin, Empty } from 'ant-design-vue';
+import { Alert, Card, Descriptions, DescriptionsItem, Tag, Table, Tabs, TabPane, Spin, Empty } from 'ant-design-vue';
 
 import { useAsteriskCdrStore } from '../../stores/asterisk-cdr.state';
 import { useAsteriskRegistrationStore } from '../../stores/asterisk-registration.state';
@@ -195,6 +195,25 @@ function qualityLabel(band: string): string {
   }
 }
 
+// Map a quality band to an Ant Design Alert severity. Alert uses
+// CSS variables internally so it picks up dark/light theme tokens
+// without us hardcoding any colours.
+function qualityAlertType(band: string): 'success' | 'info' | 'warning' | 'error' {
+  switch (band) {
+    case 'QUALITY_EXCELLENT':
+    case 'QUALITY_GOOD':
+      return 'success';
+    case 'QUALITY_FAIR':
+      return 'info';
+    case 'QUALITY_POOR':
+      return 'warning';
+    case 'QUALITY_BAD':
+      return 'error';
+    default:
+      return 'info';
+  }
+}
+
 // Translate a per-direction MOS (1.0–4.5) into the same band ladder so
 // rx and tx tags are coloured independently. Operators pinpoint the
 // problem direction by looking at which side is red.
@@ -377,23 +396,27 @@ const onlineColumns = [
           />
         </TabPane>
         <TabPane key="legs" :tab="$t('asterisk.page.calls.legs')">
-          <div
+          <Alert
             v-if="callQualitySummary"
-            style="margin-bottom: 12px; padding: 8px 12px; border-radius: 4px; background: #FAFAFA"
+            :type="qualityAlertType(callQualitySummary.band)"
+            show-icon
+            style="margin-bottom: 12px"
           >
-            <Tag :color="qualityColor(callQualitySummary.band)" style="margin-right: 8px">
-              {{ qualityLabel(callQualitySummary.band) }}
-            </Tag>
-            Worst direction:
-            <strong>leg {{ callQualitySummary.worstLegIndex + 1 }}</strong>
-            ·
-            <strong>{{ callQualitySummary.worstDirection === 'rx' ? 'incoming (RX)' : 'outgoing (TX)' }}</strong>
-            · MOS {{ callQualitySummary.worstMos.toFixed(2) }}
-            <span style="color: #888; margin-left: 8px; font-size: 12px">
+            <template #message>
+              <Tag :color="qualityColor(callQualitySummary.band)" style="margin-right: 8px">
+                {{ qualityLabel(callQualitySummary.band) }}
+              </Tag>
+              Worst direction:
+              <strong>leg {{ callQualitySummary.worstLegIndex + 1 }}</strong>
+              ·
+              <strong>{{ callQualitySummary.worstDirection === 'rx' ? 'incoming (RX)' : 'outgoing (TX)' }}</strong>
+              · MOS {{ callQualitySummary.worstMos.toFixed(2) }}
+            </template>
+            <template #description>
               The other side of the bridge heard this leg's TX as their RX — pinpoint network direction by
               looking at which side is red below.
-            </span>
-          </div>
+            </template>
+          </Alert>
           <Table
             :columns="legColumns"
             :data-source="legs"
@@ -414,7 +437,9 @@ const onlineColumns = [
                     v-if="record.rtpQos.rxLossPercent + record.rtpQos.txLossPercent > 0"
                     :style="{
                       fontSize: '11px',
-                      color: (record.rtpQos.rxLossPercent + record.rtpQos.txLossPercent) > 2 ? '#FF4D4F' : '#888',
+                      color: (record.rtpQos.rxLossPercent + record.rtpQos.txLossPercent) > 2
+                        ? 'var(--ant-color-error)'
+                        : 'var(--ant-color-text-secondary)',
                     }"
                   >
                     loss rx {{ record.rtpQos.rxLossPercent.toFixed(1) }}% / tx {{ record.rtpQos.txLossPercent.toFixed(1) }}%
@@ -423,7 +448,9 @@ const onlineColumns = [
                     v-if="record.rtpQos.rttMs > 0"
                     :style="{
                       fontSize: '11px',
-                      color: record.rtpQos.rttMs > 200 ? '#FF4D4F' : '#888',
+                      color: record.rtpQos.rttMs > 200
+                        ? 'var(--ant-color-error)'
+                        : 'var(--ant-color-text-secondary)',
                     }"
                   >
                     rtt {{ record.rtpQos.rttMs.toFixed(0) }}ms
@@ -431,7 +458,7 @@ const onlineColumns = [
                 </div>
               </template>
               <template v-else-if="column.key === 'quality'">
-                <span style="color: #BBB">—</span>
+                <span style="color: var(--ant-color-text-disabled)">—</span>
               </template>
             </template>
           </Table>

@@ -411,7 +411,13 @@ func buildDirectionClause(direction string) string {
 		return firstLegChannel + ` REGEXP ` + extPattern + ` AND ` +
 			firstLegDstChannel + ` REGEXP ` + extPattern
 	default:
-		return ""
+		// No specific direction selected: still exclude rows whose
+		// inferDirection would come back as "unknown" — neither side
+		// extension-shaped, typically Local/announce@... hops, IVR
+		// stubs, ringgroup fan-out artefacts, trunk-to-trunk DIDs.
+		// They're noise on the operator-facing list.
+		return `(` + firstLegChannel + ` REGEXP ` + extPattern + ` OR ` +
+			firstLegDstChannel + ` REGEXP ` + extPattern + `)`
 	}
 }
 
