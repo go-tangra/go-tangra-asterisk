@@ -66,9 +66,17 @@ func NewHTTPServer(ctx *bootstrap.Context, mysql *data.MySQLClients, registry *c
 	// Prometheus /metrics: vendored from menta2k/freepbx-exporter so
 	// operators don't need to deploy a second process. Same scrape
 	// schema as the standalone exporter.
+	//
+	// MUST stay unauthenticated. Prometheus scrapes don't carry user
+	// credentials, and treating /metrics as a closed endpoint would
+	// silently break the dashboards. We register via HandlePrefix to
+	// bypass Kratos's middleware chain — DO NOT route this through
+	// route.GET, and DO NOT add an auth wrapper here. If you need to
+	// restrict access, do it at the network layer (firewall the module
+	// port to Prometheus's source IP only).
 	if metrics := exporter.Handler(cfg); metrics != nil {
 		srv.HandlePrefix("/metrics", metrics)
-		l.Info("Prometheus metrics enabled at /metrics")
+		l.Info("Prometheus metrics enabled at /metrics (unauthenticated by design — restrict via network ACLs)")
 	}
 
 	route.GET("/health", func(c kratosHttp.Context) error {
