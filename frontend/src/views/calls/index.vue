@@ -59,17 +59,39 @@ function dispositionLabel(d: Disposition): string {
 // `valueFormat` must be a Day.js format token; the earlier 'iso' shortcut
 // was silently ignored, so the picker reset to "now" whenever a user chose
 // a date.
-const PICKER_FORMAT = 'YYYY-MM-DDTHH:mm:ss[Z]';
+// Real ISO 8601 with the user's timezone offset (e.g.
+// 2026-04-30T00:00:00+03:00). The previous format was
+// 'YYYY-MM-DDTHH:mm:ss[Z]' — but [Z] is a dayjs escape for a literal
+// 'Z' character, NOT a timezone conversion. That made the picker
+// output Sofia local time labelled as UTC, so the server queried a
+// window 3 hours off the user's intent and returned nothing.
+const PICKER_FORMAT = 'YYYY-MM-DDTHH:mm:ssZ';
+
+// Format a Date as ISO 8601 with the LOCAL timezone offset
+// (e.g. 2026-04-30T00:00:00+03:00). Must match PICKER_FORMAT byte-for-byte
+// — if the picker's v-model value doesn't match valueFormat exactly the
+// picker silently resets to "now" on every change.
+function toLocalIso(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const tzMin = -d.getTimezoneOffset();
+  const sign = tzMin >= 0 ? '+' : '-';
+  const abs = Math.abs(tzMin);
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}` +
+    `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
+  );
+}
 
 function defaultFromIso(): string {
   const from = new Date();
   from.setDate(from.getDate() - 7);
   from.setHours(0, 0, 0, 0);
-  return from.toISOString();
+  return toLocalIso(from);
 }
 
 function defaultToIso(): string {
-  return new Date(Date.now() + 60_000).toISOString();
+  return toLocalIso(new Date(Date.now() + 60_000));
 }
 
 const formOptions: VbenFormProps = {

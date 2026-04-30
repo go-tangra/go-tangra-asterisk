@@ -16,20 +16,35 @@ import ExtensionDrawer from './extension-drawer.vue';
 
 const statsStore = useAsteriskStatsStore();
 
-// `valueFormat` must be a Day.js format token. The earlier 'iso' shortcut
-// is not recognised, so the picker silently reset to "now" whenever a user
-// chose a date. We use a Day.js format that round-trips cleanly through
-// new Date(...) on the client and through Go's RFC3339Nano parser on the
-// server.
-const PICKER_FORMAT = 'YYYY-MM-DDTHH:mm:ss[Z]';
+// Real ISO 8601 with the user's timezone offset (e.g.
+// 2026-04-30T08:00:00+03:00). Previous format ended in '[Z]' (literal
+// Z, NOT a UTC conversion) — the picker output local time labelled as
+// UTC, so the server queried a window 3 hours off in Sofia and missed
+// today's calls.
+const PICKER_FORMAT = 'YYYY-MM-DDTHH:mm:ssZ';
+
+// Format a Date as ISO 8601 with the LOCAL timezone offset. Must match
+// PICKER_FORMAT byte-for-byte — if v-model and valueFormat disagree,
+// the picker silently resets to "now" on every change.
+function toLocalIso(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const tzMin = -d.getTimezoneOffset();
+  const sign = tzMin >= 0 ? '+' : '-';
+  const abs = Math.abs(tzMin);
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}` +
+    `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
+  );
+}
 
 // Default window: last 24 hours up to "now". Operators land on the page
 // expecting today's activity, not a 30-day backlog.
 function defaultFromIso(): string {
-  return new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  return toLocalIso(new Date(Date.now() - 24 * 60 * 60 * 1000));
 }
 function defaultToIso(): string {
-  return new Date().toISOString();
+  return toLocalIso(new Date());
 }
 
 // Render seconds as a compact "Hh Mm" / "Mm Ss" string. Operators care

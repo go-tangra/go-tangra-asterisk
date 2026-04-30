@@ -39,11 +39,25 @@ const statsStore = useAsteriskStatsStore();
 // chose a date. The format below has no milliseconds — initial values must
 // match it byte-for-byte or the picker desyncs from v-model and the
 // "From" filter silently sticks at the default.
-const PICKER_FORMAT = 'YYYY-MM-DDTHH:mm:ss[Z]';
+// Real ISO 8601 with the user's timezone offset (e.g.
+// 2026-04-30T08:00:00+03:00). Previous format ended in '[Z]' (literal
+// Z) — the picker output Sofia local time labelled as UTC, so the
+// server queried a window 3 hours off and missed today's calls.
+const PICKER_FORMAT = 'YYYY-MM-DDTHH:mm:ssZ';
 
-// Strip milliseconds so the string matches PICKER_FORMAT exactly.
+// Format a Date as ISO 8601 with the LOCAL timezone offset. Must match
+// PICKER_FORMAT byte-for-byte — if v-model and valueFormat disagree,
+// the picker silently resets to "now" on every change.
 function toPickerFormat(d: Date): string {
-  return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const tzMin = -d.getTimezoneOffset();
+  const sign = tzMin >= 0 ? '+' : '-';
+  const abs = Math.abs(tzMin);
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}` +
+    `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
+  );
 }
 
 function defaultFromIso(): string {
