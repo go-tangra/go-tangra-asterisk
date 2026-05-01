@@ -101,7 +101,17 @@ func (r *CdrRepo) ListCalls(ctx context.Context, f CallFilter) ([]CallSummary, i
 			MAX(c.duration)                                                             AS duration,
 			MAX(CASE WHEN c.disposition='ANSWERED' THEN c.billsec ELSE 0 END)           AS billsec,
 			CASE
-				WHEN SUM(CASE WHEN c.disposition='ANSWERED' THEN 1 ELSE 0 END) > 0 THEN 'ANSWERED'
+				-- Only count ANSWERED legs that involved a real bridged
+				-- Dial (dstchannel non-empty). FreePBX's announcement
+				-- flow runs Answer() on the trunk to play a prompt, and
+				-- Asterisk writes a separate post-hangup CDR row for
+				-- that trunk channel marked ANSWERED — even when the
+				-- subsequent ring-group Dial got BUSY/no-answer and
+				-- nobody actually picked up. Filtering on dstchannel
+				-- excludes those system-answer rows so the summary
+				-- disposition reflects what the operator (and caller)
+				-- experienced.
+				WHEN SUM(CASE WHEN c.disposition='ANSWERED' AND c.dstchannel <> '' THEN 1 ELSE 0 END) > 0 THEN 'ANSWERED'
 				WHEN SUM(CASE WHEN c.disposition='BUSY'     THEN 1 ELSE 0 END) > 0 THEN 'BUSY'
 				WHEN SUM(CASE WHEN c.disposition='FAILED'   THEN 1 ELSE 0 END) > 0 THEN 'FAILED'
 				ELSE 'NO ANSWER'
@@ -527,15 +537,22 @@ func buildHavingClause(f CallFilter) string {
 	if f.Disposition == "" {
 		return ""
 	}
+	// Mirror the ANSWERED-with-dstchannel logic from the SELECT's
+	// final_disposition CASE so that filtering by disposition gives
+	// the same set of calls the operator sees in the unfiltered list.
+	// "Real ANSWERED" = at least one leg with ANSWERED disposition AND
+	// a non-empty dstchannel (i.e. a real bridged Dial, not a trunk
+	// post-hangup row from an announcement Answer()).
+	const realAnswered = "SUM(c.disposition='ANSWERED' AND c.dstchannel <> '')"
 	switch strings.ToUpper(f.Disposition) {
 	case "ANSWERED":
-		return "HAVING SUM(c.disposition='ANSWERED') > 0"
+		return "HAVING " + realAnswered + " > 0"
 	case "BUSY":
-		return "HAVING SUM(c.disposition='ANSWERED')=0 AND SUM(c.disposition='BUSY') > 0"
+		return "HAVING " + realAnswered + "=0 AND SUM(c.disposition='BUSY') > 0"
 	case "FAILED":
-		return "HAVING SUM(c.disposition='ANSWERED')=0 AND SUM(c.disposition='BUSY')=0 AND SUM(c.disposition='FAILED') > 0"
+		return "HAVING " + realAnswered + "=0 AND SUM(c.disposition='BUSY')=0 AND SUM(c.disposition='FAILED') > 0"
 	case "NO ANSWER", "NO_ANSWER":
-		return "HAVING SUM(c.disposition='ANSWERED')=0 AND SUM(c.disposition='BUSY')=0 AND SUM(c.disposition='FAILED')=0"
+		return "HAVING " + realAnswered + "=0 AND SUM(c.disposition='BUSY')=0 AND SUM(c.disposition='FAILED')=0"
 	default:
 		return ""
 	}
@@ -562,6 +579,15 @@ func summarizeLegs(linkedID string, legs []CallLeg, timeline []CelEvent) *CallSu
 	for _, l := range legs {
 		switch l.Disposition {
 		case "ANSWERED":
+			// Only count ANSWERED legs that actually involved a real
+			// dial (dstchannel non-empty). FreePBX writes a separate
+			// post-hangup CDR row for the trunk channel marked ANSWERED
+			// when an announcement called Answer() before the actual
+			// dial — even though no human ever picked up. Mirroring the
+			// list-query SQL filter keeps the drilldown consistent.
+			if l.Dstchannel == "" {
+				break
+			}
 			hasAnswered = true
 			if l.BillsecSeconds > s.BillsecSeconds {
 				s.BillsecSeconds = l.BillsecSeconds
