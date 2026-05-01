@@ -32,10 +32,10 @@ func initApp(context *bootstrap.Context) (*kratos.App, func(), error) {
 		return nil, nil, err
 	}
 	cdrRepo := data.NewCdrRepo(context, mySQLClients)
-	cdrService := service.NewCdrService(context, cdrRepo)
+	pjsipRegRepo := data.NewPJSIPRegRepo(context, mySQLClients)
+	cdrService := service.NewCdrService(context, cdrRepo, pjsipRegRepo)
 	statsRepo := data.NewStatsRepo(context, mySQLClients)
 	statsService := service.NewStatsService(context, statsRepo)
-	pjsipRegRepo := data.NewPJSIPRegRepo(context, mySQLClients)
 	registrationService := service.NewRegistrationService(context, pjsipRegRepo)
 	prometheusClient := data.NewPrometheusClient(config)
 	dashboardService := service.NewDashboardService(context, prometheusClient)

@@ -18,14 +18,16 @@ import (
 type CdrService struct {
 	asteriskpb.UnimplementedAsteriskCdrServiceServer
 
-	log  *log.Helper
-	repo *data.CdrRepo
+	log     *log.Helper
+	repo    *data.CdrRepo
+	regRepo *data.PJSIPRegRepo
 }
 
-func NewCdrService(ctx *bootstrap.Context, repo *data.CdrRepo) *CdrService {
+func NewCdrService(ctx *bootstrap.Context, repo *data.CdrRepo, regRepo *data.PJSIPRegRepo) *CdrService {
 	return &CdrService{
-		log:  ctx.NewLoggerHelper("asterisk/service/cdr"),
-		repo: repo,
+		log:     ctx.NewLoggerHelper("asterisk/service/cdr"),
+		repo:    repo,
+		regRepo: regRepo,
 	}
 }
 
@@ -77,6 +79,25 @@ func (s *CdrService) GetCall(ctx context.Context, req *asteriskpb.GetCallRequest
 		}
 		s.log.WithContext(ctx).Errorf("get call: %v", err)
 		return nil, kratoserr.InternalServer("MYSQL_UNAVAILABLE", err.Error())
+	}
+
+	// Enrich each leg with the dialed extension's registration state
+	// at the moment of the call. Lets the UI distinguish real BUSY
+	// (phone returned 486) from stale-registration BUSY (phone wasn't
+	// actually online; INVITE timeout coerced to BUSY by chan_pjsip).
+	// Best-effort — the registration repo may be disabled.
+	if s.regRepo != nil && s.regRepo.Enabled() {
+		for i := range legs {
+			ext := legs[i].Extension
+			if ext == "" {
+				continue
+			}
+			st, err := s.regRepo.GetStatusAt(ctx, ext, legs[i].CallDate)
+			if err != nil || st == nil {
+				continue
+			}
+			legs[i].DialedExtensionState = st
+		}
 	}
 
 	resp := &asteriskpb.GetCallResponse{
@@ -148,6 +169,22 @@ func legToProto(l *data.CallLeg) *asteriskpb.CallLeg {
 	}
 	if l.PeerRTPQoS != nil {
 		out.PeerRtpQos = qosToProto(l.PeerRTPQoS)
+	}
+	if l.DialedExtensionState != nil {
+		out.DialedExtensionRegistration = dialedRegStatusToProto(l.DialedExtensionState)
+	}
+	return out
+}
+
+func dialedRegStatusToProto(s *data.PJSIPRegStatusAt) *asteriskpb.DialedExtensionRegistration {
+	out := &asteriskpb.DialedExtensionRegistration{
+		Registered: s.Registered,
+		LastStatus: string(s.Status),
+	}
+	if s.LastEvent != nil {
+		out.LastEventTime = timestamppb.New(s.LastEvent.EventTime)
+		out.ContactUri = s.LastEvent.ContactURI
+		out.UserAgent = s.LastEvent.UserAgent
 	}
 	return out
 }

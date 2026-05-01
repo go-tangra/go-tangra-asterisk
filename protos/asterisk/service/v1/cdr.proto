@@ -153,6 +153,30 @@ message CallLeg {
   // the extension's NIC). Absent when the column doesn't exist or
   // isn't populated for this row.
   RTPQoS peer_rtp_qos = 15;
+
+  // Registration state of the dialed extension AT THIS LEG'S CALLDATE,
+  // looked up against pjsip_registration_events. Lets the UI show
+  // 'Stale registration' / 'Unreachable' instead of a confusing
+  // 'BUSY' when chan_pjsip's INVITE timeout to a phone that wasn't
+  // actually online got coerced to a BUSY disposition.
+  // Absent for legs without a resolvable extension (e.g. trunk-to-
+  // trunk) or when the registration log is disabled.
+  DialedExtensionRegistration dialed_extension_registration = 16;
+}
+
+message DialedExtensionRegistration {
+  // Was the extension considered registered at the moment of the leg.
+  bool registered = 1;
+  // Last registration event status seen for this extension before the
+  // leg's calldate, e.g. 'REG_STATUS_REACHABLE',
+  // 'REG_STATUS_UNREACHABLE', 'REG_STATUS_REMOVED'.
+  string last_status = 2;
+  // Time of the last registration event observed before the leg.
+  google.protobuf.Timestamp last_event_time = 3;
+  // Contact URI of the most recent registration, when known.
+  string contact_uri = 4;
+  // User-Agent of the registered phone, when known.
+  string user_agent = 5;
 }
 
 // QualityBand is an operator-friendly bucket derived from MOS.

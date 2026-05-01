@@ -573,9 +573,17 @@ type CallLeg struct {
 	// bad, the trunk's network is the problem (we couldn't see it from
 	// the extension's NIC). Absent when the column doesn't exist or
 	// isn't populated for this row.
-	PeerRtpQos    *RTPQoS `protobuf:"bytes,15,opt,name=peer_rtp_qos,json=peerRtpQos,proto3" json:"peer_rtp_qos,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	PeerRtpQos *RTPQoS `protobuf:"bytes,15,opt,name=peer_rtp_qos,json=peerRtpQos,proto3" json:"peer_rtp_qos,omitempty"`
+	// Registration state of the dialed extension AT THIS LEG'S CALLDATE,
+	// looked up against pjsip_registration_events. Lets the UI show
+	// 'Stale registration' / 'Unreachable' instead of a confusing
+	// 'BUSY' when chan_pjsip's INVITE timeout to a phone that wasn't
+	// actually online got coerced to a BUSY disposition.
+	// Absent for legs without a resolvable extension (e.g. trunk-to-
+	// trunk) or when the registration log is disabled.
+	DialedExtensionRegistration *DialedExtensionRegistration `protobuf:"bytes,16,opt,name=dialed_extension_registration,json=dialedExtensionRegistration,proto3" json:"dialed_extension_registration,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *CallLeg) Reset() {
@@ -713,6 +721,96 @@ func (x *CallLeg) GetPeerRtpQos() *RTPQoS {
 	return nil
 }
 
+func (x *CallLeg) GetDialedExtensionRegistration() *DialedExtensionRegistration {
+	if x != nil {
+		return x.DialedExtensionRegistration
+	}
+	return nil
+}
+
+type DialedExtensionRegistration struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Was the extension considered registered at the moment of the leg.
+	Registered bool `protobuf:"varint,1,opt,name=registered,proto3" json:"registered,omitempty"`
+	// Last registration event status seen for this extension before the
+	// leg's calldate, e.g. 'REG_STATUS_REACHABLE',
+	// 'REG_STATUS_UNREACHABLE', 'REG_STATUS_REMOVED'.
+	LastStatus string `protobuf:"bytes,2,opt,name=last_status,json=lastStatus,proto3" json:"last_status,omitempty"`
+	// Time of the last registration event observed before the leg.
+	LastEventTime *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=last_event_time,json=lastEventTime,proto3" json:"last_event_time,omitempty"`
+	// Contact URI of the most recent registration, when known.
+	ContactUri string `protobuf:"bytes,4,opt,name=contact_uri,json=contactUri,proto3" json:"contact_uri,omitempty"`
+	// User-Agent of the registered phone, when known.
+	UserAgent     string `protobuf:"bytes,5,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DialedExtensionRegistration) Reset() {
+	*x = DialedExtensionRegistration{}
+	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DialedExtensionRegistration) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DialedExtensionRegistration) ProtoMessage() {}
+
+func (x *DialedExtensionRegistration) ProtoReflect() protoreflect.Message {
+	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DialedExtensionRegistration.ProtoReflect.Descriptor instead.
+func (*DialedExtensionRegistration) Descriptor() ([]byte, []int) {
+	return file_asterisk_service_v1_cdr_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *DialedExtensionRegistration) GetRegistered() bool {
+	if x != nil {
+		return x.Registered
+	}
+	return false
+}
+
+func (x *DialedExtensionRegistration) GetLastStatus() string {
+	if x != nil {
+		return x.LastStatus
+	}
+	return ""
+}
+
+func (x *DialedExtensionRegistration) GetLastEventTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastEventTime
+	}
+	return nil
+}
+
+func (x *DialedExtensionRegistration) GetContactUri() string {
+	if x != nil {
+		return x.ContactUri
+	}
+	return ""
+}
+
+func (x *DialedExtensionRegistration) GetUserAgent() string {
+	if x != nil {
+		return x.UserAgent
+	}
+	return ""
+}
+
 // RTPQoS is the parsed cdr.rtpqos blob. Each *_jitter / *_loss /
 // *_mos field is reported separately for receive vs transmit because
 // asymmetric problems (one-way audio, jittery upload) are common
@@ -740,7 +838,7 @@ type RTPQoS struct {
 
 func (x *RTPQoS) Reset() {
 	*x = RTPQoS{}
-	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[5]
+	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -752,7 +850,7 @@ func (x *RTPQoS) String() string {
 func (*RTPQoS) ProtoMessage() {}
 
 func (x *RTPQoS) ProtoReflect() protoreflect.Message {
-	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[5]
+	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -765,7 +863,7 @@ func (x *RTPQoS) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RTPQoS.ProtoReflect.Descriptor instead.
 func (*RTPQoS) Descriptor() ([]byte, []int) {
-	return file_asterisk_service_v1_cdr_proto_rawDescGZIP(), []int{5}
+	return file_asterisk_service_v1_cdr_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *RTPQoS) GetRxJitterMs() float64 {
@@ -885,7 +983,7 @@ type CelEvent struct {
 
 func (x *CelEvent) Reset() {
 	*x = CelEvent{}
-	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[6]
+	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -897,7 +995,7 @@ func (x *CelEvent) String() string {
 func (*CelEvent) ProtoMessage() {}
 
 func (x *CelEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[6]
+	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -910,7 +1008,7 @@ func (x *CelEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CelEvent.ProtoReflect.Descriptor instead.
 func (*CelEvent) Descriptor() ([]byte, []int) {
-	return file_asterisk_service_v1_cdr_proto_rawDescGZIP(), []int{6}
+	return file_asterisk_service_v1_cdr_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *CelEvent) GetEventTime() *timestamppb.Timestamp {
@@ -994,7 +1092,7 @@ type GetCallResponse struct {
 
 func (x *GetCallResponse) Reset() {
 	*x = GetCallResponse{}
-	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[7]
+	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1006,7 +1104,7 @@ func (x *GetCallResponse) String() string {
 func (*GetCallResponse) ProtoMessage() {}
 
 func (x *GetCallResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[7]
+	mi := &file_asterisk_service_v1_cdr_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1019,7 +1117,7 @@ func (x *GetCallResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCallResponse.ProtoReflect.Descriptor instead.
 func (*GetCallResponse) Descriptor() ([]byte, []int) {
-	return file_asterisk_service_v1_cdr_proto_rawDescGZIP(), []int{7}
+	return file_asterisk_service_v1_cdr_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetCallResponse) GetSummary() *Call {
@@ -1085,7 +1183,7 @@ const file_asterisk_service_v1_cdr_proto_rawDesc = "" +
 	"\x05calls\x18\x01 \x03(\v2\x19.asterisk.service.v1.CallR\x05calls\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\"5\n" +
 	"\x0eGetCallRequest\x12#\n" +
-	"\blinkedid\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\blinkedid\"\xd6\x04\n" +
+	"\blinkedid\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\blinkedid\"\xcc\x05\n" +
 	"\aCallLeg\x12\x1a\n" +
 	"\buniqueid\x18\x01 \x01(\tR\buniqueid\x126\n" +
 	"\bcalldate\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\bcalldate\x12\x18\n" +
@@ -1105,9 +1203,21 @@ const file_asterisk_service_v1_cdr_proto_rawDesc = "" +
 	"\x0erecording_file\x18\r \x01(\tR\rrecordingFile\x124\n" +
 	"\artp_qos\x18\x0e \x01(\v2\x1b.asterisk.service.v1.RTPQoSR\x06rtpQos\x12=\n" +
 	"\fpeer_rtp_qos\x18\x0f \x01(\v2\x1b.asterisk.service.v1.RTPQoSR\n" +
-	"peerRtpQosB\f\n" +
+	"peerRtpQos\x12t\n" +
+	"\x1ddialed_extension_registration\x18\x10 \x01(\v20.asterisk.service.v1.DialedExtensionRegistrationR\x1bdialedExtensionRegistrationB\f\n" +
 	"\n" +
-	"_extension\"\xb3\x03\n" +
+	"_extension\"\xe2\x01\n" +
+	"\x1bDialedExtensionRegistration\x12\x1e\n" +
+	"\n" +
+	"registered\x18\x01 \x01(\bR\n" +
+	"registered\x12\x1f\n" +
+	"\vlast_status\x18\x02 \x01(\tR\n" +
+	"lastStatus\x12B\n" +
+	"\x0flast_event_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\rlastEventTime\x12\x1f\n" +
+	"\vcontact_uri\x18\x04 \x01(\tR\n" +
+	"contactUri\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x05 \x01(\tR\tuserAgent\"\xb3\x03\n" +
 	"\x06RTPQoS\x12 \n" +
 	"\frx_jitter_ms\x18\x01 \x01(\x01R\n" +
 	"rxJitterMs\x12 \n" +
@@ -1174,45 +1284,48 @@ func file_asterisk_service_v1_cdr_proto_rawDescGZIP() []byte {
 }
 
 var file_asterisk_service_v1_cdr_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_asterisk_service_v1_cdr_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_asterisk_service_v1_cdr_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_asterisk_service_v1_cdr_proto_goTypes = []any{
-	(Disposition)(0),              // 0: asterisk.service.v1.Disposition
-	(QualityBand)(0),              // 1: asterisk.service.v1.QualityBand
-	(*Call)(nil),                  // 2: asterisk.service.v1.Call
-	(*ListCallsRequest)(nil),      // 3: asterisk.service.v1.ListCallsRequest
-	(*ListCallsResponse)(nil),     // 4: asterisk.service.v1.ListCallsResponse
-	(*GetCallRequest)(nil),        // 5: asterisk.service.v1.GetCallRequest
-	(*CallLeg)(nil),               // 6: asterisk.service.v1.CallLeg
-	(*RTPQoS)(nil),                // 7: asterisk.service.v1.RTPQoS
-	(*CelEvent)(nil),              // 8: asterisk.service.v1.CelEvent
-	(*GetCallResponse)(nil),       // 9: asterisk.service.v1.GetCallResponse
-	(*timestamppb.Timestamp)(nil), // 10: google.protobuf.Timestamp
+	(Disposition)(0),                    // 0: asterisk.service.v1.Disposition
+	(QualityBand)(0),                    // 1: asterisk.service.v1.QualityBand
+	(*Call)(nil),                        // 2: asterisk.service.v1.Call
+	(*ListCallsRequest)(nil),            // 3: asterisk.service.v1.ListCallsRequest
+	(*ListCallsResponse)(nil),           // 4: asterisk.service.v1.ListCallsResponse
+	(*GetCallRequest)(nil),              // 5: asterisk.service.v1.GetCallRequest
+	(*CallLeg)(nil),                     // 6: asterisk.service.v1.CallLeg
+	(*DialedExtensionRegistration)(nil), // 7: asterisk.service.v1.DialedExtensionRegistration
+	(*RTPQoS)(nil),                      // 8: asterisk.service.v1.RTPQoS
+	(*CelEvent)(nil),                    // 9: asterisk.service.v1.CelEvent
+	(*GetCallResponse)(nil),             // 10: asterisk.service.v1.GetCallResponse
+	(*timestamppb.Timestamp)(nil),       // 11: google.protobuf.Timestamp
 }
 var file_asterisk_service_v1_cdr_proto_depIdxs = []int32{
-	10, // 0: asterisk.service.v1.Call.calldate:type_name -> google.protobuf.Timestamp
+	11, // 0: asterisk.service.v1.Call.calldate:type_name -> google.protobuf.Timestamp
 	0,  // 1: asterisk.service.v1.Call.disposition:type_name -> asterisk.service.v1.Disposition
-	10, // 2: asterisk.service.v1.ListCallsRequest.from:type_name -> google.protobuf.Timestamp
-	10, // 3: asterisk.service.v1.ListCallsRequest.to:type_name -> google.protobuf.Timestamp
+	11, // 2: asterisk.service.v1.ListCallsRequest.from:type_name -> google.protobuf.Timestamp
+	11, // 3: asterisk.service.v1.ListCallsRequest.to:type_name -> google.protobuf.Timestamp
 	0,  // 4: asterisk.service.v1.ListCallsRequest.disposition:type_name -> asterisk.service.v1.Disposition
 	2,  // 5: asterisk.service.v1.ListCallsResponse.calls:type_name -> asterisk.service.v1.Call
-	10, // 6: asterisk.service.v1.CallLeg.calldate:type_name -> google.protobuf.Timestamp
+	11, // 6: asterisk.service.v1.CallLeg.calldate:type_name -> google.protobuf.Timestamp
 	0,  // 7: asterisk.service.v1.CallLeg.disposition:type_name -> asterisk.service.v1.Disposition
-	7,  // 8: asterisk.service.v1.CallLeg.rtp_qos:type_name -> asterisk.service.v1.RTPQoS
-	7,  // 9: asterisk.service.v1.CallLeg.peer_rtp_qos:type_name -> asterisk.service.v1.RTPQoS
-	1,  // 10: asterisk.service.v1.RTPQoS.quality:type_name -> asterisk.service.v1.QualityBand
-	10, // 11: asterisk.service.v1.CelEvent.event_time:type_name -> google.protobuf.Timestamp
-	2,  // 12: asterisk.service.v1.GetCallResponse.summary:type_name -> asterisk.service.v1.Call
-	6,  // 13: asterisk.service.v1.GetCallResponse.legs:type_name -> asterisk.service.v1.CallLeg
-	8,  // 14: asterisk.service.v1.GetCallResponse.timeline:type_name -> asterisk.service.v1.CelEvent
-	3,  // 15: asterisk.service.v1.AsteriskCdrService.ListCalls:input_type -> asterisk.service.v1.ListCallsRequest
-	5,  // 16: asterisk.service.v1.AsteriskCdrService.GetCall:input_type -> asterisk.service.v1.GetCallRequest
-	4,  // 17: asterisk.service.v1.AsteriskCdrService.ListCalls:output_type -> asterisk.service.v1.ListCallsResponse
-	9,  // 18: asterisk.service.v1.AsteriskCdrService.GetCall:output_type -> asterisk.service.v1.GetCallResponse
-	17, // [17:19] is the sub-list for method output_type
-	15, // [15:17] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	8,  // 8: asterisk.service.v1.CallLeg.rtp_qos:type_name -> asterisk.service.v1.RTPQoS
+	8,  // 9: asterisk.service.v1.CallLeg.peer_rtp_qos:type_name -> asterisk.service.v1.RTPQoS
+	7,  // 10: asterisk.service.v1.CallLeg.dialed_extension_registration:type_name -> asterisk.service.v1.DialedExtensionRegistration
+	11, // 11: asterisk.service.v1.DialedExtensionRegistration.last_event_time:type_name -> google.protobuf.Timestamp
+	1,  // 12: asterisk.service.v1.RTPQoS.quality:type_name -> asterisk.service.v1.QualityBand
+	11, // 13: asterisk.service.v1.CelEvent.event_time:type_name -> google.protobuf.Timestamp
+	2,  // 14: asterisk.service.v1.GetCallResponse.summary:type_name -> asterisk.service.v1.Call
+	6,  // 15: asterisk.service.v1.GetCallResponse.legs:type_name -> asterisk.service.v1.CallLeg
+	9,  // 16: asterisk.service.v1.GetCallResponse.timeline:type_name -> asterisk.service.v1.CelEvent
+	3,  // 17: asterisk.service.v1.AsteriskCdrService.ListCalls:input_type -> asterisk.service.v1.ListCallsRequest
+	5,  // 18: asterisk.service.v1.AsteriskCdrService.GetCall:input_type -> asterisk.service.v1.GetCallRequest
+	4,  // 19: asterisk.service.v1.AsteriskCdrService.ListCalls:output_type -> asterisk.service.v1.ListCallsResponse
+	10, // 20: asterisk.service.v1.AsteriskCdrService.GetCall:output_type -> asterisk.service.v1.GetCallResponse
+	19, // [19:21] is the sub-list for method output_type
+	17, // [17:19] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_asterisk_service_v1_cdr_proto_init() }
@@ -1228,7 +1341,7 @@ func file_asterisk_service_v1_cdr_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_asterisk_service_v1_cdr_proto_rawDesc), len(file_asterisk_service_v1_cdr_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   8,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -4,7 +4,7 @@ import { computed, ref, watch } from 'vue';
 import { useVbenDrawer } from 'shell/vben/common-ui';
 import { $t } from 'shell/locales';
 
-import { Alert, Card, Descriptions, DescriptionsItem, Tag, Table, Tabs, TabPane, Spin, Empty } from 'ant-design-vue';
+import { Alert, Card, Descriptions, DescriptionsItem, Tag, Table, Tabs, TabPane, Tooltip, Spin, Empty } from 'ant-design-vue';
 
 import { useAsteriskCdrStore } from '../../stores/asterisk-cdr.state';
 import { useAsteriskRegistrationStore } from '../../stores/asterisk-registration.state';
@@ -125,6 +125,76 @@ function dispositionColor(d: Disposition | string): string {
   }
 }
 
+// Resolve the per-leg disposition Asterisk recorded into something an
+// operator can act on. Two heuristics layered:
+//
+//   1. Server-side cross-check (preferred): if the dialed extension's
+//      registration log says it was NOT registered at the leg's
+//      calldate (or its last status was REMOVED/UNREACHABLE/UNQUALIFIED),
+//      relabel to "Stale registration" — Asterisk dialed a phantom
+//      contact in its PJSIP table that never actually responded.
+//
+//   2. Client-side billsec heuristic (fallback): a real SIP 486 BUSY
+//      arrives in <1s. A 'BUSY' with billsec ≥ 30s is almost always
+//      chan_pjsip's INVITE timeout coerced into BUSY by FreePBX
+//      defaults — the phone never responded. Relabel "Unreachable"
+//      so operators don't mistakenly think a phone was on another call.
+//
+// Returns { label, color, hint } where hint is a tooltip string
+// explaining the relabel (or '' when no relabel was needed).
+interface ResolvedDisposition {
+  label: string;
+  color: string;
+  hint: string;
+}
+
+function resolveLegDisposition(leg: {
+  disposition: string;
+  billsecSeconds: number;
+  dialedExtensionRegistration?: DialedExtensionRegistration;
+}): ResolvedDisposition {
+  const baseLabel = dispositionLabel(leg.disposition);
+  const baseColor = dispositionColor(leg.disposition);
+
+  // (1) Use the registration log when present.
+  const reg = leg.dialedExtensionRegistration;
+  if (reg && leg.disposition === 'DISPOSITION_BUSY') {
+    const offline = reg.registered === false ||
+      reg.lastStatus === 'REG_STATUS_REMOVED' ||
+      reg.lastStatus === 'REG_STATUS_UNREACHABLE' ||
+      reg.lastStatus === 'REG_STATUS_UNQUALIFIED';
+    if (offline) {
+      const last = reg.lastStatus
+        ? reg.lastStatus.replace(/^REG_STATUS_/, '').toLowerCase()
+        : 'unknown';
+      return {
+        label: 'Stale registration',
+        color: '#FAAD14',
+        hint:
+          `CDR recorded BUSY, but the dialed extension was not registered at the time ` +
+          `of the call (last status: ${last}). Asterisk likely had a stale PJSIP contact ` +
+          `and the INVITE timed out — no human ever picked up.`,
+      };
+    }
+  }
+
+  // (2) Billsec heuristic for BUSY. A real SIP 486 BUSY HERE returns
+  // sub-second; only INVITE timeouts coerce-to-BUSY take this long.
+  if (leg.disposition === 'DISPOSITION_BUSY' && leg.billsecSeconds >= 30) {
+    return {
+      label: 'Unreachable',
+      color: '#FAAD14',
+      hint:
+        `CDR recorded BUSY but the leg lasted ${leg.billsecSeconds}s — too long for a ` +
+        `real SIP 486 (which arrives in <1s). This is almost always chan_pjsip's INVITE ` +
+        `timeout to a phone that wasn't actually responding, coerced to BUSY by ` +
+        `FreePBX's Dial defaults.`,
+    };
+  }
+
+  return { label: baseLabel, color: baseColor, hint: '' };
+}
+
 // callerLabel and destinationLabel surface the user's mental model of the call
 // (who placed it, where they were trying to reach) regardless of how FreePBX
 // internally routed it. callerSubtitle/destinationSubtitle expose the raw
@@ -207,6 +277,10 @@ interface DisplayLeg {
   displayIndex: number;
   side: 'originator' | 'answerer';
   rtpQos?: RTPQoS;
+  // Carried through so resolveLegDisposition can apply the registration
+  // log heuristic. Same value on both originator and answerer rows of
+  // a split CDR — the disposition is per-call, not per-perspective.
+  dialedExtensionRegistration?: DialedExtensionRegistration;
   // Map back to the source CDR leg index so callQualitySummary can
   // reference 'leg 1 originator' instead of 'leg 1.5'.
   sourceLegIndex: number;
@@ -237,6 +311,7 @@ const displayLegs = computed<DisplayLeg[]>(() => {
       displayIndex: out.length + 1,
       side: 'originator',
       rtpQos: leg.rtpQos,
+      dialedExtensionRegistration: leg.dialedExtensionRegistration,
       sourceLegIndex: idx,
     });
     if (leg.dstchannel && leg.dstchannel !== leg.channel && leg.peerRtpQos) {
@@ -251,6 +326,7 @@ const displayLegs = computed<DisplayLeg[]>(() => {
         displayIndex: out.length + 1,
         side: 'answerer',
         rtpQos: leg.peerRtpQos,
+        dialedExtensionRegistration: leg.dialedExtensionRegistration,
         sourceLegIndex: idx,
       });
     }
@@ -529,6 +605,19 @@ const onlineColumns = [
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'side'">
                 <Tag :color="sideTagColor(record.side)">{{ record.side }}</Tag>
+              </template>
+              <template v-else-if="column.key === 'disposition'">
+                <Tooltip
+                  v-if="resolveLegDisposition(record).hint"
+                  :title="resolveLegDisposition(record).hint"
+                >
+                  <Tag :color="resolveLegDisposition(record).color">
+                    {{ resolveLegDisposition(record).label }}
+                  </Tag>
+                </Tooltip>
+                <Tag v-else :color="resolveLegDisposition(record).color">
+                  {{ resolveLegDisposition(record).label }}
+                </Tag>
               </template>
               <template v-else-if="column.key === 'quality' && record.rtpQos">
                 <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center">

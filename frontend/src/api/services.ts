@@ -67,6 +67,14 @@ export interface RTPQoS {
   quality: QualityBand;
 }
 
+export interface DialedExtensionRegistration {
+  registered: boolean;
+  lastStatus: string;            // e.g. 'REG_STATUS_REACHABLE'
+  lastEventTime?: string;
+  contactUri?: string;
+  userAgent?: string;
+}
+
 export interface CallLeg {
   uniqueid: string;
   calldate: string;
@@ -86,6 +94,11 @@ export interface CallLeg {
   // when operators haven't opted into capturing the bridged peer's
   // perspective.
   peerRtpQos?: RTPQoS;
+  // Was the dialed extension registered at the moment of this leg?
+  // Looked up against pjsip_registration_events server-side. Present
+  // only for legs whose dstchannel resolved to an extension AND when
+  // the registration log is enabled.
+  dialedExtensionRegistration?: DialedExtensionRegistration;
 }
 
 export interface CelEvent {

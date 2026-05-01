@@ -49,6 +49,18 @@ type CallLeg struct {
 	// Operators populate it to diagnose asymmetric problems where the
 	// local channel and the bridged peer disagree on quality.
 	PeerRTPQoS *RTPQoS
+
+	// DialedExtensionState is the registration state of the dialed
+	// extension at the moment this leg's CDR was created — looked up
+	// against pjsip_registration_events. Only populated for legs whose
+	// dstchannel resolved to an internal extension. nil when the
+	// registration log is disabled or the leg has no extension.
+	//
+	// Lets the UI distinguish 'real BUSY' (phone returned 486 quickly)
+	// from 'stale registration' (Asterisk had a contact in PJSIP table
+	// but the phone wasn't actually online — INVITE timeout, recorded
+	// as BUSY by chan_pjsip after ~60-90s).
+	DialedExtensionState *PJSIPRegStatusAt
 }
 
 // CelEvent is one row from cel.
