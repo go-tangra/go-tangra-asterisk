@@ -7,7 +7,7 @@ require (
 	buf.build/go/protovalidate v1.1.3
 	github.com/go-kratos/kratos/v2 v2.9.2
 	github.com/go-sql-driver/mysql v1.9.3
-	github.com/go-tangra/go-tangra-common v1.12.0
+	github.com/go-tangra/go-tangra-common v1.17.1
 	github.com/google/wire v0.7.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/tx7do/kratos-bootstrap/api v0.0.34
