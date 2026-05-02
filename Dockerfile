@@ -28,6 +28,14 @@ RUN curl -sSL "https://github.com/bufbuild/buf/releases/latest/download/buf-$(un
 
 WORKDIR /src
 
+# Pull in the sibling go-tangra-common via a BuildKit named context
+# (declared in docker-compose.yaml as `additional_contexts: common:
+# ../go-tangra-common`). Required because go.mod has a temporary
+# `replace ../go-tangra-common` while the registration-rework branch
+# is in flight — without this COPY the Go module download below fails
+# trying to resolve the replace target.
+COPY --from=common . /go-tangra-common/
+
 COPY go.mod go.sum* ./
 RUN go mod download || true
 
@@ -67,7 +75,7 @@ COPY --from=builder /src/configs/ /app/configs/
 
 RUN addgroup -g 1000 asterisk && \
     adduser -D -u 1000 -G asterisk asterisk && \
-    chown -R asterisk:asterisk /app
+    mkdir -p /app/certs && chown -R asterisk:asterisk /app
 
 USER asterisk:asterisk
 
