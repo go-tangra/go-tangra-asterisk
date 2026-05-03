@@ -12,13 +12,56 @@ RestartSec=10
 StartLimitIntervalSec=300
 StartLimitBurst=5
 
-# Environment file (create /etc/tangra-asterisk/env with your values)
+# Environment file (create /etc/tangra-asterisk/env with your values).
+# At minimum set: ADMIN_GRPC_ENDPOINT, MODULE_BOOTSTRAP_SECRET, LCM_CA_FINGERPRINT,
+# ASTERISK_CDR_DSN, ASTERISK_CONFIG_DSN.
 EnvironmentFile=-/etc/tangra-asterisk/env
 
-# Admin service registration
+# ---------------------------------------------------------------------------
+# Registration with admin gateway (registration-rework v3.0.0+)
+# ---------------------------------------------------------------------------
+
+# Admin gateway gRPC endpoint (plaintext :7787 — registration channel).
 Environment=ADMIN_GRPC_ENDPOINT=
+
+# Routable host:port admin uses to dial back into this service. MUST be
+# reachable from the admin host (NAT/firewall-aware).
 Environment=GRPC_ADVERTISE_ADDR=0.0.0.0:9800
-Environment=MODULE_REGISTRATION_SECRET=
+
+# HTTP server endpoint admin proxies /modules/asterisk/* to (frontend
+# bundle + recordings + /metrics). Override with your real hostname.
+Environment=HTTP_ADVERTISE_ADDR=0.0.0.0:9801
+Environment=FRONTEND_ENTRY_URL=/modules/asterisk/remoteEntry.js
+
+# Admin's :7787 is plaintext. Without this, the registration client
+# auto-detects the cert.Ensure-issued client cert and tries mTLS,
+# which hangs forever against admin's plain port.
+Environment=REGISTRATION_INSECURE=1
+
+# ---------------------------------------------------------------------------
+# Self-signed cert flow against LCM (registration-rework Phase 1)
+# ---------------------------------------------------------------------------
+
+# LCM's bootstrap port. The module dials this with a CSR + secret +
+# fingerprint pin and gets back a signed cert + CA bundle.
+Environment=LCM_BOOTSTRAP_ENDPOINT=lcm.example.local:9101
+
+# Shared bootstrap secret. MUST match LCM's `module_registration_secret`
+# in lcm.yaml. Override in /etc/tangra-asterisk/env.
+Environment=MODULE_BOOTSTRAP_SECRET=
+
+# Pre-shared SHA-256 fingerprint of LCM's root CA, lowercase hex (64
+# chars). Mandatory pin — no TOFU. Get it from LCM's operator with:
+#   ./scripts/lcm-fingerprint.sh           (in go-tangra-docker)
+Environment=LCM_CA_FINGERPRINT=
+
+# Where cert.Ensure persists the issued ca/server/client cert files.
+# Must be writable by the service user (see ReadWritePaths below).
+Environment=CERTS_DIR=/var/lib/tangra-asterisk/certs
+
+# ---------------------------------------------------------------------------
+# Module-specific config
+# ---------------------------------------------------------------------------
 
 # MySQL DSNs to FreePBX (override defaults in /etc/tangra-asterisk/data.yaml).
 # Required at runtime — without them the service exits on startup.
@@ -45,13 +88,6 @@ Environment=ASTERISK_RECORDINGS_PATH=/var/spool/asterisk/monitor
 # Leave ASTERISK_PROMETHEUS_URL empty to disable the dashboards UI.
 Environment=ASTERISK_PROMETHEUS_URL=http://127.0.0.1:9090
 
-# mTLS server certs (gRPC server). Paths follow the cert-manager convention
-# under $CERTS_DIR (set in /etc/tangra-asterisk/env):
-#   {CERTS_DIR}/ca/ca.crt
-#   {CERTS_DIR}/asterisk-server/server.{crt,key}
-# Override with ASTERISK_CA_CERT_PATH / ASTERISK_SERVER_CERT_PATH /
-# ASTERISK_SERVER_KEY_PATH in /etc/tangra-asterisk/env if needed.
-
 # Security hardening
 NoNewPrivileges=true
 ProtectSystem=strict
@@ -61,9 +97,12 @@ ProtectKernelTunables=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
 
-# Allow read/write to config and certs only — module is read-only against
-# FreePBX MySQL and embeds its own frontend, so no other writable paths.
+# Allow writes to config dir, the cert.Ensure cert dir, and the
+# recordings path (read-only access enough for the recordings, but
+# systemd ProtectSystem=strict needs them whitelisted to be readable
+# in some configurations).
 ReadWritePaths=/etc/tangra-asterisk
+ReadWritePaths=/var/lib/tangra-asterisk
 
 # Logging
 StandardOutput=journal
