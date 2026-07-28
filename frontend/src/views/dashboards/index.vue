@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
+import { formatTime } from '../../utils/datetime';
+
 import {
   Alert,
   Card,
@@ -996,7 +998,7 @@ function formatCallDuration(seconds: number): string {
           <Card>
             <Statistic title="Asterisk" :value="upTag.label" :value-style="{ color: upTag.color }" />
             <div v-if="lastUpdated" style="font-size: 12px; color: #888; margin-top: 4px">
-              Updated {{ lastUpdated.toLocaleTimeString() }}
+              Updated {{ formatTime(lastUpdated.toISOString()) }}
             </div>
           </Card>
         </Col>
