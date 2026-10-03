@@ -10,7 +10,10 @@ export interface Bucket extends Record<string, unknown> {start:string;total:numb
 export interface Overview {timezone:string;total:number;answered:number;missed:number;meanTalkSeconds:number;meanPickupSeconds:number|null;series:Bucket[]}
 export interface Extension extends Record<string, unknown> {timezone:string;extension:string;name:string;total:number;inbound:number;outbound:number;answered:number;missed:number;talkSeconds:number;meanTalkSeconds:number;meanPickupSeconds:number|null;workloadShare:number;busiestHour:number;hourOfDay:number[];series:Bucket[]}
 export interface Ringgroup {total:number;answered:number;noAnswer:number;allBusy:number;failed:number;missedCalls:Call[]}
-export interface RegistrationEvent {id:number;time:string;endpoint:string;contact:string;status:string;expire:string}
+export interface RegistrationEvent extends Record<string, unknown> {id:number;time:string;endpoint:string;contact:string;status:string;expire:string}
+// Registration history: paged like Page<T>; total/page fields and the
+// truncation flags are optional so older or capped responses still render.
+export interface RegistrationHistory {items:RegistrationEvent[];total?:number;page?:number;page_size?:number;truncated?:boolean;has_more?:boolean}
 export interface RegistrationStatus {extension:string;at:string;status:string;registered:boolean;certainty:string;lastEvent:RegistrationEvent|null;expiresAt:string|null}
 export interface Gap {start:string;end:string}
 export interface LiveCall {linkedid:string;channels:{uniqueid:string;channel:string;caller:string;connected:string;state:string;bridge:string}[]}
