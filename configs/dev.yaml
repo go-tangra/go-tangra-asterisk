@@ -22,6 +22,8 @@ binding:
   cdr_dsn: ${ASTERISK_CDR_DSN}
   config_dsn: ${ASTERISK_CONFIG_DSN}
   registration_dsn: ${ASTERISK_REGISTRATION_DSN}
+  # Registration events older than this are pruned hourly (0 keeps them forever).
+  registration_retention_days: 400
   recording_root: ${ASTERISK_RECORDING_ROOT}
   timezone: Europe/Sofia
   source_timezone: Europe/Sofia

@@ -141,6 +141,22 @@ func (a *App) ready(ctx context.Context) error {
 	e := a.Pools.Ready(ctx)
 	return e
 }
+
+// pruneRegistration removes registration events past the retention, at start
+// and then hourly.
+func (a *App) pruneRegistration(ctx context.Context) {
+	for {
+		before := time.Now().AddDate(0, 0, -a.Cfg.Binding.RegistrationRetentionDays)
+		if _, err := a.Registration.Prune(ctx, before); err != nil && ctx.Err() == nil {
+			a.Log.Warn("registration retention prune failed; retrying next hour")
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Hour):
+		}
+	}
+}
 func (a *App) worker(ctx context.Context, f func(context.Context)) {
 	a.wg.Add(1)
 	go func() { defer a.wg.Done(); f(ctx) }()
@@ -168,6 +184,9 @@ func (a *App) Run(ctx context.Context) error {
 	a.worker(wctx, a.qualityWorker)
 	if a.Listener != nil {
 		a.worker(wctx, a.Listener.Run)
+	}
+	if a.Registration != nil && a.Cfg.Binding.RegistrationRetentionDays > 0 {
+		a.worker(wctx, a.pruneRegistration)
 	}
 	a.worker(wctx, func(context.Context) {
 		if a.admin.Serve(a.adminListener) != nil {

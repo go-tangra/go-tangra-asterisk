@@ -24,17 +24,20 @@ type Config struct {
 	StreamSeconds       int     `yaml:"stream_seconds"`
 }
 type Binding struct {
-	TenantID            string `yaml:"tenant_id"`
-	PBXID               string `yaml:"pbx_id"`
-	CDRDSN              string `yaml:"cdr_dsn" json:"-"`
-	ConfigDSN           string `yaml:"config_dsn" json:"-"`
-	RegistrationDSN     string `yaml:"registration_dsn" json:"-"`
-	AdoptRegistration   bool   `yaml:"adopt_registration"`
-	RecordingRoot       string `yaml:"recording_root"`
-	Timezone            string `yaml:"timezone"`
-	SourceTimezone      string `yaml:"source_timezone"`
-	MonitoringURL       string `yaml:"monitoring_url" json:"-"`
-	MonitoringDedicated bool   `yaml:"monitoring_dedicated"`
+	TenantID          string `yaml:"tenant_id"`
+	PBXID             string `yaml:"pbx_id"`
+	CDRDSN            string `yaml:"cdr_dsn" json:"-"`
+	ConfigDSN         string `yaml:"config_dsn" json:"-"`
+	RegistrationDSN   string `yaml:"registration_dsn" json:"-"`
+	AdoptRegistration bool   `yaml:"adopt_registration"`
+	// RegistrationRetentionDays prunes registration events older than this
+	// many days (0 keeps them forever).
+	RegistrationRetentionDays int    `yaml:"registration_retention_days"`
+	RecordingRoot             string `yaml:"recording_root"`
+	Timezone                  string `yaml:"timezone"`
+	SourceTimezone            string `yaml:"source_timezone"`
+	MonitoringURL             string `yaml:"monitoring_url" json:"-"`
+	MonitoringDedicated       bool   `yaml:"monitoring_dedicated"`
 }
 type AMI struct {
 	Address  string `yaml:"address"`
@@ -53,7 +56,7 @@ func Default() Config {
 	f.ServiceName = "asterisk"
 	f.Server.HTTPAddr = ":8444"
 	f.Limits.RequestTimeout = 300 * time.Second
-	return Config{Config: f, Binding: Binding{Timezone: "Europe/Sofia", SourceTimezone: "Europe/Sofia"}, Gateway: Gateway{Service: "gateway"}, QueryTimeoutSeconds: 5, StreamSeconds: 240}
+	return Config{Config: f, Binding: Binding{Timezone: "Europe/Sofia", SourceTimezone: "Europe/Sofia", RegistrationRetentionDays: 400}, Gateway: Gateway{Service: "gateway"}, QueryTimeoutSeconds: 5, StreamSeconds: 240}
 }
 func Load(path string) (Config, error) {
 	c := Default()
@@ -106,6 +109,9 @@ func (c Config) Validate() error {
 	}
 	if c.Limits.RequestTimeout < time.Duration(c.StreamSeconds)*time.Second {
 		return errors.New("framework request_timeout must cover stream_seconds")
+	}
+	if c.Binding.RegistrationRetentionDays < 0 || c.Binding.RegistrationRetentionDays > 3650 {
+		return errors.New("registration_retention_days must be 0 (keep forever) to 3650")
 	}
 	if c.QueryTimeoutSeconds < 1 || c.QueryTimeoutSeconds > 30 || c.StreamSeconds < 1 || c.StreamSeconds > 300 {
 		return errors.New("invalid query/stream bounds")

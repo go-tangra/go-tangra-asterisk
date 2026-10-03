@@ -126,6 +126,27 @@ func (r *Repository) Append(ctx context.Context, e Event) error {
 	_, err := r.DB.ExecContext(ctx, "INSERT INTO pjsip_registration_events(event_time,endpoint,aor,contact_uri,status,user_agent,via_address,reg_expire,rtt_usec) VALUES(?,?,?,?,?,?,?,?,?)", e.Time.UTC(), e.Endpoint, e.AOR, e.Contact, e.Status, e.UserAgent, e.ViaAddress, expire, e.RTT)
 	return err
 }
+
+// Prune deletes registration events older than before, in batches so no
+// long-running delete holds locks; it returns the number of rows removed.
+// Observation gaps are kept (they are few and mark uncertainty).
+func (r *Repository) Prune(ctx context.Context, before time.Time) (int64, error) {
+	var total int64
+	for ctx.Err() == nil {
+		qctx, cancel := context.WithTimeout(ctx, r.Timeout)
+		res, err := r.DB.ExecContext(qctx, "DELETE FROM pjsip_registration_events WHERE event_time<? ORDER BY event_time LIMIT 5000", before.UTC())
+		cancel()
+		if err != nil {
+			return total, err
+		}
+		n, _ := res.RowsAffected()
+		total += n
+		if n < 5000 {
+			return total, nil
+		}
+	}
+	return total, ctx.Err()
+}
 func (r *Repository) BeginGap(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, r.Timeout)
 	defer cancel()

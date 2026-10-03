@@ -24,6 +24,54 @@ type Listener struct {
 	OnFrame           func(map[string]string)
 	OnSweep           func()
 	RegistrationFresh atomic.Bool
+
+	// written is the last registration row stored per endpoint+contact; the
+	// minute-by-minute contact snapshot only writes what changed (see
+	// ShouldStore). Only the session goroutine touches it.
+	written map[string]registration.Event
+}
+
+// RefreshAhead is how long before the stored expiry of an unchanged, still
+// registered contact a refreshed row is written, so stored history never
+// shows a continuously registered phone as expired. Contact snapshots run
+// every minute, well inside this margin.
+const RefreshAhead = 10 * time.Minute
+
+// ShouldStore reports whether e must be written given the last stored row
+// prev of the same endpoint and contact: on any change other than the expiry
+// (status, AOR, user agent, address), when the expiry moves earlier or appears
+// or disappears, or when the stored expiry is about to lapse and e extends it.
+// Repeated identical observations (the periodic PJSIPShowContacts snapshot,
+// qualify RTT updates) are not stored again.
+func ShouldStore(prev registration.Event, ok bool, e registration.Event, now time.Time) bool {
+	switch {
+	case !ok:
+		return true
+	case !strings.EqualFold(prev.Status, e.Status), prev.AOR != e.AOR, prev.UserAgent != e.UserAgent, prev.ViaAddress != e.ViaAddress:
+		return true
+	case prev.Expire.IsZero() != e.Expire.IsZero(), e.Expire.Before(prev.Expire):
+		return true
+	case !prev.Expire.IsZero() && prev.Expire.Sub(now) < RefreshAhead && e.Expire.After(prev.Expire):
+		return true
+	}
+	return false
+}
+
+// store writes e unless it repeats the last stored row of its contact.
+func (l *Listener) store(ctx context.Context, e registration.Event, force bool) error {
+	if l.written == nil {
+		l.written = map[string]registration.Event{}
+	}
+	key := e.Endpoint + "\x00" + e.Contact
+	prev, ok := l.written[key]
+	if !force && !ShouldStore(prev, ok, e, e.Time) {
+		return nil
+	}
+	if err := l.Store.Append(ctx, e); err != nil {
+		return err
+	}
+	l.written[key] = e
+	return nil
 }
 
 func (l *Listener) Run(ctx context.Context) {
@@ -179,7 +227,7 @@ func (l *Listener) session(ctx context.Context) error {
 				if l.OnContact != nil {
 					l.OnContact(e)
 				}
-				if l.Store != nil && l.Store.Append(ctx, e) != nil {
+				if l.Store != nil && l.store(ctx, e, false) != nil {
 					failedCapture()
 				}
 			}
@@ -197,7 +245,7 @@ func (l *Listener) session(ctx context.Context) error {
 					if state.Registered && !contacts[contact.Endpoint+"\x00"+contact.Contact] {
 						contact.Time = time.Now().UTC()
 						contact.Status = "Removed"
-						if l.Store.Append(ctx, contact) != nil {
+						if l.store(ctx, contact, true) != nil {
 							good = false
 							failedCapture()
 						}

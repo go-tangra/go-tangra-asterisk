@@ -23,7 +23,7 @@ Supply a SPIRE workload socket and a matching service identity, trust domain and
 
 Grant only SELECT on PBX CDR/CEL and configuration schemas. The service runs no PBX migrations or control actions. The history source is required; CEL, RTP columns and directory names are probed and optional. Mount recordings read-only. Use a dedicated Prometheus upstream for the configured PBX/tenant, set `monitoring_dedicated: true`, and isolate its scrape targets. This setting is an operator assertion of dedicated storage, not an automatic partitioning mechanism.
 
-Registration uses a **separate module-owned** MySQL database. Bootstrap is explicit:
+Registration uses a **separate module-owned** MySQL database. Only changes are stored: the minute-by-minute contact snapshot writes a row when a contact's status, AOR, user agent or address changes, or shortly before its stored expiry lapses (so a continuously registered phone never appears expired). Events older than `registration_retention_days` (default 400, `0` keeps them forever) are pruned hourly. Bootstrap is explicit:
 
 ```sh
 ./bin/asterisksvc bootstrap -config configs/dev.yaml
