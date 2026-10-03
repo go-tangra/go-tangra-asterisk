@@ -27,7 +27,7 @@ func fixture(t *testing.T) (config.Config, *pbx.Pools, *sql.DB) {
 	adminDSN := os.Getenv("ASTERISK_FIXTURE_ADMIN_DSN")
 	readerDSN := os.Getenv("ASTERISK_FIXTURE_CDR_DSN")
 	if adminDSN == "" || readerDSN == "" {
-		t.Fatal("set ASTERISK_FIXTURE_ADMIN_DSN and ASTERISK_FIXTURE_CDR_DSN for dedicated MySQL fixture")
+		t.Skip("MySQL fixture not configured: set ASTERISK_FIXTURE_ADMIN_DSN and ASTERISK_FIXTURE_CDR_DSN (and ASTERISK_FIXTURE_REGISTRATION_DSN for registration tests)")
 	}
 	for _, dsn := range []string{adminDSN, readerDSN} {
 		c, e := mysql.ParseDSN(dsn)

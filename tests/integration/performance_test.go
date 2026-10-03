@@ -68,6 +68,9 @@ func TestReferencePerformance(t *testing.T) {
 			t.Fatal(e)
 		}
 	}
+	if raceEnabled {
+		t.Skip("SC-004 latency is not measured under the race detector")
+	}
 	if p95 > 2*time.Second {
 		t.Fatalf("SC-004 p95 %s exceeds 2s", p95)
 	}

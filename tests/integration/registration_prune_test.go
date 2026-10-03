@@ -13,7 +13,7 @@ import (
 func TestRegistrationPrune(t *testing.T) {
 	c, _, _ := fixture(t)
 	if c.Binding.RegistrationDSN == "" {
-		t.Skip("registration fixture DSN not set")
+		t.Skip("set ASTERISK_FIXTURE_REGISTRATION_DSN to run registration fixture tests")
 	}
 	ctx := context.Background()
 	if e := registration.Bootstrap(ctx, c); e != nil {
