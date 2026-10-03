@@ -24,6 +24,9 @@ type RTPQoS struct {
 }
 
 func ParseRTPQoS(raw string) *RTPQoS {
+	if strings.TrimSpace(raw) == "" {
+		return nil // no quality data (the common case): skip the allocations
+	}
 	q := &RTPQoS{}
 	valid := false
 	fields := map[string]**float64{"rxjitter": &q.RxJitterMs, "txjitter": &q.TxJitterMs, "rtt": &q.RTTMs, "lp": &q.RxLoss, "rlp": &q.TxLoss, "rxcount": &q.RxCount, "txcount": &q.TxCount, "rxmes": &q.RxMES, "txmes": &q.TxMES}
