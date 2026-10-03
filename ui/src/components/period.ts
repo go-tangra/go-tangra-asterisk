@@ -1,7 +1,12 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import { fromWallClock, loadTimezone, pbxTimezone, toWallClock } from './timezone'
+// Period boundaries are typed as PBX wall-clock time and sent as UTC instants.
 export function usePeriod() {
- const local = (d:Date) => new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)
- const to=ref(local(new Date())),from=ref(local(new Date(Date.now()-86400000)))
- const query=()=>({from:new Date(from.value).toISOString(),to:new Date(to.value).toISOString()})
+ const end=Date.now(),start=end-86400000
+ const to=ref(toWallClock(end)),from=ref(toWallClock(start))
+ // Defaults the user has not touched follow a timezone learnt later.
+ watch(pbxTimezone,(tz,old)=>{if(from.value===toWallClock(start,old)&&to.value===toWallClock(end,old)){from.value=toWallClock(start,tz);to.value=toWallClock(end,tz)}})
+ void loadTimezone()
+ const query=()=>({from:fromWallClock(from.value),to:fromWallClock(to.value)})
  return {from,to,query}
 }
