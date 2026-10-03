@@ -100,14 +100,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/asterisk/stats/ringgroups/{ringGroup}": {
+    "/api/asterisk/stats/ringgroups/{ring_group}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["stats__stats_ringgroups_ringGroup"];
+        get: operations["stats__stats_ringgroups_ring_group"];
         put?: never;
         post?: never;
         delete?: never;
@@ -924,7 +924,7 @@ export interface operations {
             };
         };
     };
-    stats__stats_ringgroups_ringGroup: {
+    stats__stats_ringgroups_ring_group: {
         parameters: {
             query: {
                 from: string;
@@ -932,7 +932,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                ringGroup: string;
+                ring_group: string;
             };
             cookie?: never;
         };

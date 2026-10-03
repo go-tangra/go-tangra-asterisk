@@ -79,7 +79,7 @@ func New(d Deps) (*Server, error) {
 	if e != nil {
 		return nil, e
 	}
-	handlers := map[string]http.HandlerFunc{"/capabilities": s.capabilities, "/calls": s.calls, "/calls/{linkedid}": s.callDetail, "/stats/overview": s.overview, "/stats/extensions": s.extensions, "/stats/extensions/{extension}": s.extension, "/stats/ringgroups/{ringGroup}": s.ringgroup, "/directory/extensions": s.directory, "/registration/status/{extension}": s.registrationStatus, "/registration/events": s.registrationEvents, "/registration/online": s.registrationOnline, "/live/calls": s.liveSnapshot, "/live/calls/stream": s.liveStream, "/recordings/{linkedid}": s.recording, "/dashboard/query": s.query, "/dashboard/query_range": s.queryRange}
+	handlers := map[string]http.HandlerFunc{"/capabilities": s.capabilities, "/calls": s.calls, "/calls/{linkedid}": s.callDetail, "/stats/overview": s.overview, "/stats/extensions": s.extensions, "/stats/extensions/{extension}": s.extension, "/stats/ringgroups/{ring_group}": s.ringgroup, "/directory/extensions": s.directory, "/registration/status/{extension}": s.registrationStatus, "/registration/events": s.registrationEvents, "/registration/online": s.registrationOnline, "/live/calls": s.liveSnapshot, "/live/calls/stream": s.liveStream, "/recordings/{linkedid}": s.recording, "/dashboard/query": s.query, "/dashboard/query_range": s.queryRange}
 	for _, route := range man.Routes {
 		short := strings.TrimPrefix(route.Path, asteriskmanifest.APIPrefix)
 		h, ok := handlers[short]

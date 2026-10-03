@@ -7,7 +7,7 @@ import { usePeriod } from '@/components/period'
 import PeriodFilter from '@/components/PeriodFilter.vue'
 const {from,to,query}=usePeriod();const bucket=ref('day'),data=ref<Overview>(),ring=ref<Ringgroup>(),group=ref('600'),error=ref('')
 async function load(){error.value='';try{data.value=await get<Overview>('/api/asterisk/stats/overview',{...query(),bucket:bucket.value})}catch(e){error.value=explain(e)}}
-async function drill(){error.value='';try{ring.value=await get<Ringgroup>('/api/asterisk/stats/ringgroups/{ringGroup}',query(),{ringGroup:group.value})}catch(e){error.value=explain(e)}}
+async function drill(){error.value='';try{ring.value=await get<Ringgroup>('/api/asterisk/stats/ringgroups/{ring_group}',query(),{ring_group:group.value})}catch(e){error.value=explain(e)}}
 onMounted(load)
 const columns:Column<Bucket>[]=[{key:'start',label:'Bucket',format:b=>new Date(b.start).toLocaleString(undefined,{timeZone:data.value?.timezone??'Europe/Sofia'})},{key:'total',label:'Calls'},{key:'answered',label:'Answered'},{key:'missed',label:'Missed'}]
 </script>

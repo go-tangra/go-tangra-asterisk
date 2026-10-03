@@ -694,9 +694,9 @@
         ]
       }
     },
-    "/api/asterisk/stats/ringgroups/{ringGroup}": {
+    "/api/asterisk/stats/ringgroups/{ring_group}": {
       "get": {
-        "operationId": "stats__stats_ringgroups_ringGroup",
+        "operationId": "stats__stats_ringgroups_ring_group",
         "x-freya-permission": "stats:read",
         "security": [
           {
@@ -767,7 +767,7 @@
         },
         "parameters": [
           {
-            "name": "ringGroup",
+            "name": "ring_group",
             "in": "path",
             "required": true,
             "schema": {

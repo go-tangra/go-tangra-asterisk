@@ -10,7 +10,7 @@ All paths below are relative to `/api/asterisk` and require verified tenant bind
 | GET /stats/overview | stats:read | from,to,bucket(hour/day/week); totals, means, series |
 | GET /stats/extensions | stats:read | from,to,extension,pagination/sort; paged extension stats |
 | GET /stats/extensions/{extension} | stats:read | from,to,bucket; summary, series, hourOfDay |
-| GET /stats/ringgroups/{ringGroup} | stats:read | from,to; outcome counts and bounded missedCalls |
+| GET /stats/ringgroups/{ring_group} | stats:read | from,to; outcome counts and bounded missedCalls |
 | GET /directory/extensions | stats:read | directory items with optional names |
 | GET /registration/status/{extension} | registration:read | optional at (now); status, registered, certainty, lastEvent |
 | GET /registration/events | registration:read | from,to,extension,pagination; observed events |

@@ -118,7 +118,7 @@ func (s *Server) ringgroup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, 503, "DEPENDENCY_UNAVAILABLE")
 		return
 	}
-	v, e := s.Deps.Reports.Ringgroup(r.Context(), tenant(r), r.PathValue("ringGroup"), from, to)
+	v, e := s.Deps.Reports.Ringgroup(r.Context(), tenant(r), r.PathValue("ring_group"), from, to)
 	if e != nil {
 		failure(w, r, e)
 		return
