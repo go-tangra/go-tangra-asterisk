@@ -1,0 +1,2 @@
+import { test, expect, requirePortal } from './fixtures'
+test('registration historical certainty through portal',async({page})=>{requirePortal();await page.goto('/asterisk/extensions');await page.getByRole('row').nth(1).click();await expect(page.getByRole('heading',{name:'Registration history'})).toBeVisible();await page.getByLabel('Observed at (blank for now)').fill('2026-01-01T00:05');await page.getByRole('button',{name:'Inspect',exact:true}).click();await expect(page.getByText(/observed|uncertain|unknown/).first()).toBeVisible()})

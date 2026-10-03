@@ -1,0 +1,2 @@
+import { test, expect, requirePortal } from './fixtures'
+test('history filters and logical-call drawer through portal',async({page})=>{requirePortal();await page.goto('/asterisk');await expect(page.getByRole('heading',{name:'Call history',exact:true})).toBeVisible();const rows=page.getByRole('row');await expect(rows.nth(1)).toBeVisible();await rows.nth(1).click();await expect(page.getByRole('dialog')).toBeVisible();await expect(page.getByRole('heading',{name:'Call legs'})).toBeVisible();await expect(page.getByRole('heading',{name:'Timeline'})).toBeVisible()})

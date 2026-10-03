@@ -1,0 +1,194 @@
+{
+  "max_parallel": 3,
+  "base_branch": "HEAD",
+  "worktree_dir": ".spec-router/worktrees",
+  "agent_timeout_seconds": 3600,
+  "agents": {
+    "claude": {
+      "command": "claude",
+      "args": [
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--dangerously-skip-permissions",
+        "{prompt}"
+      ],
+      "env": {
+        "ECC_GATEGUARD": "off"
+      }
+    },
+    "codex": {
+      "command": "codex",
+      "args": [
+        "exec",
+        "--json",
+        "--sandbox",
+        "workspace-write",
+        "-c",
+        "sandbox_workspace_write.network_access=true",
+        "{prompt}"
+      ]
+    },
+    "kimi": {
+      "command": "kimi",
+      "args": [
+        "--prompt",
+        "{prompt}",
+        "--output-format",
+        "stream-json"
+      ]
+    }
+  },
+  "routes": {
+    "frontend": {
+      "primary": "codex",
+      "fallback": [
+        "kimi",
+        "claude"
+      ],
+      "patterns": [
+        "frontend/*",
+        "web/*",
+        "ui/*",
+        "*.vue",
+        "*.tsx",
+        "*.css"
+      ],
+      "keywords": [
+        "frontend",
+        "ui",
+        "vue",
+        "react",
+        "css",
+        "tailwind",
+        "component",
+        "page"
+      ]
+    },
+    "backend": {
+      "primary": "claude",
+      "fallback": [
+        "codex",
+        "kimi"
+      ],
+      "patterns": [
+        "backend/*",
+        "internal/*",
+        "cmd/*",
+        "api/*",
+        "*.go",
+        "*.rs"
+      ],
+      "keywords": [
+        "backend",
+        "api",
+        "database",
+        "grpc",
+        "handler",
+        "service",
+        "repository",
+        "migration"
+      ]
+    },
+    "tests": {
+      "primary": "kimi",
+      "fallback": [
+        "codex",
+        "claude"
+      ],
+      "patterns": [
+        "tests/*",
+        "test/*",
+        "*_test.go"
+      ],
+      "keywords": [
+        "test",
+        "integration test",
+        "e2e"
+      ]
+    },
+    "infra": {
+      "primary": "claude",
+      "fallback": [
+        "kimi",
+        "codex"
+      ],
+      "patterns": [
+        "deploy/*",
+        "helm/*",
+        "terraform/*",
+        "Dockerfile"
+      ],
+      "keywords": [
+        "kubernetes",
+        "helm",
+        "terraform",
+        "docker",
+        "deployment"
+      ]
+    }
+  },
+  "default": {
+    "primary": "claude",
+    "fallback": [
+      "codex",
+      "kimi"
+    ]
+  },
+  "nonstop": {
+    "enabled": true,
+    "quota_cooldown_seconds": 3600,
+    "transient_retries": 2,
+    "transient_retry_seconds": 10,
+    "quota_patterns": [
+      "rate limit",
+      "rate_limit",
+      "quota",
+      "usage limit",
+      "credit balance",
+      "too many requests",
+      "429",
+      "capacity"
+    ],
+    "transient_patterns": [
+      "timeout",
+      "timed out",
+      "connection reset",
+      "connection refused",
+      "temporarily unavailable",
+      "502",
+      "503",
+      "504"
+    ]
+  },
+  "output": {
+    "mode": "live",
+    "prefix": true,
+    "timestamps": false,
+    "save_logs": true,
+    "heartbeat_seconds": 30
+  },
+  "integration": {
+    "conflict_resolution": {
+      "enabled": true,
+      "primary": "claude",
+      "fallback": [
+        "codex",
+        "kimi"
+      ],
+      "max_attempts": 3
+    }
+  },
+  "memory": {
+    "enabled": true,
+    "path": "docs/memory/AGENT_MEMORY.md",
+    "max_entries_per_section": 50,
+    "max_entries_per_task": 5,
+    "max_related_tasks": 6,
+    "max_context_bytes": 49152
+  },
+  "dependencies": {
+    "mode": "all"
+  }
+}

@@ -1,0 +1,23 @@
+services:
+  asterisk:
+    build:
+      context: ..
+      secrets: [npm_token]
+    user: "65532:65532"
+    read_only: true
+    restart: unless-stopped
+    env_file: ../.env
+    volumes:
+      - ../configs/dev.yaml:/etc/asterisk-module/config.yaml:ro
+      - ./policy.yaml:/etc/asterisk-module/deploy/policy.yaml:ro
+      - /run/spire/sockets:/run/spire/sockets:ro
+      - /var/spool/asterisk/monitor:/recordings:ro
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
+    networks: [mesh]
+    # No host ports: the portal reaches the service over SPIFFE mTLS.
+secrets:
+  npm_token:
+    environment: NODE_AUTH_TOKEN
+networks:
+  mesh:
+    external: true

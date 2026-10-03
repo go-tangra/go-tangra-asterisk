@@ -1,0 +1,21 @@
+[Unit]
+Description=Tangra V4 Asterisk observer
+After=network-online.target spire-agent.service
+Wants=network-online.target
+[Service]
+User=tangra-asterisk
+Group=tangra-asterisk
+WorkingDirectory=/etc/tangra-asterisk
+EnvironmentFile=/etc/tangra-asterisk/environment
+ExecStart=/usr/local/bin/asterisksvc -config /etc/tangra-asterisk/config.yaml
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/var/spool/asterisk/monitor /run/spire/sockets
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+[Install]
+WantedBy=multi-user.target

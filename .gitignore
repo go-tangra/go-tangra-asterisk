@@ -1,0 +1,16 @@
+bin/
+ui/node_modules/
+ui/dist/
+*.exe
+*.test
+*.out
+vendor/
+*.log
+.env*
+.DS_Store
+*.tmp
+*.swp
+.idea/
+.vscode/
+ui/test-results/
+ui/playwright-report/

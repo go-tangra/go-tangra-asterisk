@@ -1,0 +1,2 @@
+import { test, expect, requirePortal } from './fixtures'
+test('monitoring period and extension filters through portal',async({page})=>{requirePortal();await page.goto('/asterisk/dashboards');await expect(page.getByRole('heading',{name:'PBX monitoring',exact:true})).toBeVisible();await expect(page.getByLabel('Extension',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(page.getByText('Samples',{exact:true}).first()).toBeVisible()})

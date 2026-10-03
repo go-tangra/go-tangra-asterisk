@@ -1,0 +1,18 @@
+<script setup lang="ts">
+import { onMounted, onUnmounted, ref } from 'vue'
+import { UiPage, UiAlert, UiCard, UiInput, UiSelect, UiDataTable, type Column } from '@go-tangra/ui'
+import { get, explain } from '@/api/client'
+import type { Call, Page, Capabilities } from '@/api/types'
+import { usePeriod } from '@/components/period'
+import PeriodFilter from '@/components/PeriodFilter.vue'
+import CallDrawer from './call-drawer.vue'
+const {from,to,query}=usePeriod()
+const src=ref(''),dst=ref(''),extension=ref(''),direction=ref(''),disposition=ref('')
+const page=ref(1),size=ref(25),sort=ref({key:'start',dir:'desc' as 'asc'|'desc'})
+const result=ref<Page<Call>>(),caps=ref<Capabilities>({}),selected=ref(''),error=ref(''),loading=ref(false)
+let controller:AbortController|undefined
+async function load(reset=false){if(reset)page.value=1;controller?.abort();controller=new AbortController();const active=controller;error.value='';loading.value=true;try{result.value=await get<Page<Call>>('/api/asterisk/calls',{...query(),src:src.value,dst:dst.value,extension:extension.value,direction:direction.value,disposition:disposition.value,page:page.value,page_size:size.value,sort:sort.value.key,order:sort.value.dir},{},controller.signal)}catch(e){if(!(e instanceof DOMException && e.name==='AbortError'))error.value=explain(e)}finally{if(controller===active)loading.value=false}}
+onMounted(async()=>{try{caps.value=await get<Capabilities>('/api/asterisk/capabilities')}catch(e){error.value=explain(e)};await load()});onUnmounted(()=>controller?.abort())
+const columns:Column<Call>[]=[{key:'start',label:'Started',sortable:true,format:c=>new Date(c.start).toLocaleString()},{key:'src',label:'Caller',sortable:true},{key:'dst',label:'Destination',sortable:true},{key:'direction',label:'Direction'},{key:'disposition',label:'Outcome'},{key:'durationSeconds',label:'Duration (s)',sortable:true},{key:'answeredExtension',label:'Answered by'}]
+</script>
+<template><UiPage title="Call history"><template #filters><PeriodFilter v-model:from="from" v-model:to="to" :loading="loading" @submit="load(true)"/><div class="flex flex-wrap gap-3"><UiInput id="caller" v-model="src" label="Caller"/><UiInput id="destination" v-model="dst" label="Destination"/><UiInput id="extension" v-model="extension" label="Extension"/><UiSelect id="direction" v-model="direction" label="Direction" :options="['inbound','outbound','internal','unknown'].map(value=>({title:value,value}))"/><UiSelect id="disposition" v-model="disposition" label="Outcome" :options="['ANSWERED','NO ANSWER','BUSY','FAILED'].map(value=>({title:value,value}))"/></div></template><UiAlert v-if="error" kind="error">{{error}}</UiAlert><UiCard :padded="false"><UiDataTable :items="result?.items??[]" :columns="columns" :total="result?.total??0" :page="page" :page-size="size" :sort="sort" :loading="loading" caption="Logical calls — select one to investigate" empty-title="No calls" empty-text="Try another period or filter." clickable @row-click="selected=$event.linkedid" @update:page="page=$event;load()" @update:page-size="size=$event;load(true)" @update:sort="sort=$event;load(true)"/></UiCard><CallDrawer v-if="selected" :key="selected" :linkedid="selected" :capabilities="caps" @close="selected=''"/></UiPage></template>

@@ -1,0 +1,2 @@
+CREATE TABLE IF NOT EXISTS cdr (linkedid VARCHAR(64),uniqueid VARCHAR(64),sequence INT,calldate DATETIME,channel VARCHAR(128),dstchannel VARCHAR(128),src VARCHAR(64),dst VARCHAR(64),disposition VARCHAR(16),duration INT,billsec INT,recordingfile VARCHAR(255),rtpqos TEXT,peerrtpqos TEXT,KEY idx_link(linkedid,calldate),KEY idx_date(calldate));
+CREATE TABLE IF NOT EXISTS cel (linkedid VARCHAR(64),uniqueid VARCHAR(64),eventtime DATETIME,eventtype VARCHAR(32),channame VARCHAR(128),KEY idx_link(linkedid,eventtime),KEY idx_time(eventtime));

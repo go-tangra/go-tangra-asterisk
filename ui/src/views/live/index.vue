@@ -1,0 +1,12 @@
+<script setup lang="ts">
+import { onMounted, onUnmounted, ref } from 'vue'
+import { ApiError } from '@go-tangra/ui/api'
+import { UiPage, UiAlert, UiCard } from '@go-tangra/ui'
+import { BASE, get, explain } from '@/api/client'
+import type { LiveSnapshot, LiveUpdate, LiveCall } from '@/api/types'
+const calls=ref<LiveCall[]>([]),fresh=ref(false),error=ref('');let generation=0,stream:EventSource|undefined,retry:ReturnType<typeof setTimeout>|undefined,stopped=false
+function apply(update:LiveUpdate,type:string){if(update.generation!==generation)return;fresh.value=update.fresh;if(type==='upsert'&&update.call){calls.value=calls.value.filter(c=>c.linkedid!==update.call?.linkedid).concat(update.call)}else if(type==='remove'){calls.value=calls.value.filter(c=>c.linkedid!==update.linkedid)}}
+async function connect(){if(stopped)return;stream?.close();error.value='';try{const caps=await get<Record<string,{available:boolean}>>('/api/asterisk/capabilities');if(!caps.live?.available){error.value='Live monitoring is unavailable.';return};const snapshot=await get<LiveSnapshot>('/api/asterisk/live/calls');if(stopped)return;calls.value=snapshot.calls;generation=snapshot.generation;fresh.value=snapshot.fresh;stream=new EventSource(BASE+'/live/calls/stream',{withCredentials:true});stream.addEventListener('snapshot',event=>{const v=JSON.parse((event as MessageEvent).data) as LiveSnapshot;calls.value=v.calls;generation=v.generation;fresh.value=v.fresh});for(const type of ['upsert','remove','status'])stream.addEventListener(type,event=>apply(JSON.parse((event as MessageEvent).data) as LiveUpdate,type));stream.onerror=()=>{fresh.value=false;stream?.close();retry=setTimeout(connect,1000)}}catch(e){error.value=explain(e);fresh.value=false;if(!(e instanceof ApiError && [401,403].includes(e.status)))retry=setTimeout(connect,3000)}}
+onMounted(connect);onUnmounted(()=>{stopped=true;stream?.close();clearTimeout(retry)})
+</script>
+<template><UiPage title="Live calls"><UiAlert v-if="error" kind="error">{{error}}</UiAlert><UiAlert v-if="!fresh" kind="warning">Live state is stale. Waiting for a fresh snapshot.</UiAlert><p>{{calls.length}} active calls</p><div class="grid gap-3 md:grid-cols-2"><UiCard v-for="call in calls" :key="call.linkedid"><h3 class="font-mono">{{call.linkedid}}</h3><p v-for="ch in call.channels" :key="ch.uniqueid">{{ch.caller}} → {{ch.connected}} · {{ch.state}} · {{ch.channel}}</p></UiCard></div></UiPage></template>

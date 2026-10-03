@@ -1,0 +1,36 @@
+service_name: asterisk
+trust_domain: tangra.local
+env: development
+identity:
+  provider: spiffe
+  workload_socket: unix:///run/spire/sockets/agent.sock
+authz:
+  source: file
+  path: deploy/policy.yaml
+server:
+  http_addr: :8444
+  grpc_addr: :9444
+admin:
+  addr: 127.0.0.1:9094
+discovery:
+  static:
+    auth: ["${ASTERISK_AUTH_TARGET}"]
+    gateway: ["${ASTERISK_PORTAL_TARGET}"]
+binding:
+  tenant_id: ${ASTERISK_TENANT_ID}
+  pbx_id: ${ASTERISK_PBX_ID}
+  cdr_dsn: ${ASTERISK_CDR_DSN}
+  config_dsn: ${ASTERISK_CONFIG_DSN}
+  registration_dsn: ${ASTERISK_REGISTRATION_DSN}
+  recording_root: ${ASTERISK_RECORDING_ROOT}
+  timezone: Europe/Sofia
+  source_timezone: Europe/Sofia
+  monitoring_url: ${ASTERISK_MONITORING_URL}
+  monitoring_dedicated: true
+ami:
+  enabled: false
+gateway:
+  service: gateway
+  issuer: ${ASTERISK_AUTH_ISSUER}
+query_timeout_seconds: 5
+stream_seconds: 240
