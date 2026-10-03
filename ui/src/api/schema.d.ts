@@ -308,7 +308,10 @@ export interface components {
             celAvailable: boolean;
             qualityAvailable: boolean;
         };
+        /** @description Feature availability by name; timezone is the reporting timezone (IANA name) that statistics buckets use. */
         Capabilities: {
+            timezone: string;
+        } & {
             [key: string]: components["schemas"]["Capability"];
         };
         RTPQoS: {
