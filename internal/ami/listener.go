@@ -16,9 +16,11 @@ import (
 )
 
 type Listener struct {
-	Config            config.AMI
-	Registry          *calls.Registry
-	Store             *registration.Repository
+	Config   config.AMI
+	Registry *calls.Registry
+	// Store is the registration repository; it may appear while running
+	// (opened late), and capture starts from the next contact snapshot.
+	Store             atomic.Pointer[registration.Repository]
 	OnError           func()
 	OnContact         func(registration.Event)
 	OnFrame           func(map[string]string)
@@ -29,6 +31,8 @@ type Listener struct {
 	// minute-by-minute contact snapshot only writes what changed (see
 	// ShouldStore). Only the session goroutine touches it.
 	written map[string]registration.Event
+	// attached is the store capture last opened a gap in; session goroutine only.
+	attached *registration.Repository
 }
 
 // RefreshAhead is how long before the stored expiry of an unchanged, still
@@ -62,7 +66,7 @@ func ShouldStore(prev registration.Event, ok bool, e registration.Event, now tim
 }
 
 // store writes e unless it repeats the last stored row of its contact.
-func (l *Listener) store(ctx context.Context, e registration.Event, force bool) error {
+func (l *Listener) store(ctx context.Context, store *registration.Repository, e registration.Event, force bool) error {
 	if l.written == nil {
 		l.written = map[string]registration.Event{}
 	}
@@ -71,7 +75,7 @@ func (l *Listener) store(ctx context.Context, e registration.Event, force bool) 
 	if !force && !ShouldStore(prev, ok, e, e.Time) {
 		return nil
 	}
-	if err := l.Store.Append(ctx, e); err != nil {
+	if err := store.Append(ctx, e); err != nil {
 		return err
 	}
 	l.written[key] = e
@@ -80,8 +84,9 @@ func (l *Listener) store(ctx context.Context, e registration.Event, force bool) 
 
 func (l *Listener) Run(ctx context.Context) {
 	backoff := time.Second
-	if l.Store != nil {
-		_ = l.Store.RestartGap(ctx)
+	if store := l.Store.Load(); store != nil {
+		l.attached = store
+		_ = store.RestartGap(ctx)
 	}
 	for ctx.Err() == nil {
 		started := time.Now()
@@ -89,8 +94,8 @@ func (l *Listener) Run(ctx context.Context) {
 		_ = l.session(ctx)
 		l.RegistrationFresh.Store(false)
 		l.Registry.Status(false)
-		if l.Store != nil {
-			_ = l.Store.BeginGap(ctx)
+		if store := l.Store.Load(); store != nil {
+			_ = store.BeginGap(ctx)
 		}
 		if l.OnError != nil {
 			l.OnError()
@@ -170,11 +175,19 @@ func (l *Listener) session(ctx context.Context) error {
 	contacts := map[string]bool{}
 	captureHealthy := true
 	lastSnapshot := time.Now()
+	store := l.Store.Load()
+	if store != nil && store != l.attached {
+		// Observation was not recorded before now: open a gap the first stored
+		// contact snapshot closes.
+		l.attached = store
+		_ = store.RestartGap(ctx)
+	}
+	skipSnapshot := false
 	failedCapture := func() {
 		captureHealthy = false
 		l.RegistrationFresh.Store(false)
-		if l.Store != nil {
-			_ = l.Store.RestartGap(ctx)
+		if store != nil {
+			_ = store.RestartGap(ctx)
 		}
 		if l.OnError != nil {
 			l.OnError()
@@ -217,6 +230,25 @@ func (l *Listener) session(ctx context.Context) error {
 				return e
 			}
 		}
+		if store == nil {
+			if store = l.Store.Load(); store != nil {
+				// Registration opened mid-session: keep the gap open until a
+				// snapshot taken after this point has been stored.
+				l.attached = store
+				captureHealthy = false
+				_ = store.RestartGap(ctx)
+				if contactsReady {
+					contacts = map[string]bool{}
+					contactsReady = false
+				} else {
+					skipSnapshot = true
+				}
+				lastSnapshot = time.Now()
+				if e := WriteAction(conn, "PJSIPShowContacts", map[string]string{"ActionID": "contact-snapshot"}); e != nil {
+					return e
+				}
+			}
+		}
 		if l.OnFrame != nil {
 			l.OnFrame(m)
 		}
@@ -234,14 +266,19 @@ func (l *Listener) session(ctx context.Context) error {
 				if l.OnContact != nil {
 					l.OnContact(e)
 				}
-				if l.Store != nil && l.store(ctx, e, false) != nil {
+				if store != nil && l.store(ctx, store, e, false) != nil {
 					failedCapture()
 				}
 			}
 		case "ContactListComplete":
+			if skipSnapshot {
+				skipSnapshot = false
+				contacts = map[string]bool{}
+				break
+			}
 			contactsReady = true
-			if l.Store != nil {
-				prior, e := l.Store.Contacts(ctx)
+			if store != nil {
+				prior, e := store.Contacts(ctx)
 				if e != nil {
 					failedCapture()
 					break
@@ -252,7 +289,7 @@ func (l *Listener) session(ctx context.Context) error {
 					if state.Registered && !contacts[contact.Endpoint+"\x00"+contact.Contact] {
 						contact.Time = time.Now().UTC()
 						contact.Status = "Removed"
-						if l.store(ctx, contact, true) != nil {
+						if l.store(ctx, store, contact, true) != nil {
 							good = false
 							failedCapture()
 						}
@@ -260,9 +297,9 @@ func (l *Listener) session(ctx context.Context) error {
 				}
 				if good {
 					if !captureHealthy {
-						_ = l.Store.RestartGap(ctx)
+						_ = store.RestartGap(ctx)
 					}
-					if l.Store.RecoverGap(ctx) != nil {
+					if store.RecoverGap(ctx) != nil {
 						failedCapture()
 					} else {
 						captureHealthy = true

@@ -39,12 +39,12 @@ func (s *Server) callDetail(w http.ResponseWriter, r *http.Request) {
 		failure(w, r, e)
 		return
 	}
-	if ok, _ := s.Deps.Checker.Has(r.Context(), tenant(r), user(r), "registration:read"); ok && s.Deps.Registration != nil {
-		enrichment, e := cdr.RegistrationAtCall(r.Context(), s.Deps.Registration, tenant(r), v.Summary)
-		if e == nil {
-			v.Registration = enrichment
+	if store := s.registration(); store != nil {
+		if ok, _ := s.Deps.Checker.Has(r.Context(), tenant(r), user(r), "registration:read"); ok {
+			if enrichment, e := cdr.RegistrationAtCall(r.Context(), store, tenant(r), v.Summary); e == nil {
+				v.Registration = enrichment
+			}
 		}
-
 	}
 	jsonResponse(w, v)
 }

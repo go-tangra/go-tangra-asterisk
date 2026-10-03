@@ -7,7 +7,8 @@ import (
 )
 
 func (s *Server) registrationStatus(w http.ResponseWriter, r *http.Request) {
-	if s.Deps.Registration == nil {
+	store := s.registration()
+	if store == nil {
 		writeError(w, r, 503, "FEATURE_UNAVAILABLE")
 		return
 	}
@@ -16,7 +17,7 @@ func (s *Server) registrationStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, 400, "INVALID_ARGUMENT")
 		return
 	}
-	v, gaps, e := s.Deps.Registration.At(r.Context(), tenant(r), r.PathValue("extension"), when)
+	v, gaps, e := store.At(r.Context(), tenant(r), r.PathValue("extension"), when)
 	if e != nil {
 		failure(w, r, e)
 		return
@@ -24,7 +25,8 @@ func (s *Server) registrationStatus(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, map[string]any{"status": v[0], "gaps": gaps})
 }
 func (s *Server) registrationOnline(w http.ResponseWriter, r *http.Request) {
-	if s.Deps.Registration == nil {
+	store := s.registration()
+	if store == nil {
 		writeError(w, r, 503, "FEATURE_UNAVAILABLE")
 		return
 	}
@@ -33,7 +35,7 @@ func (s *Server) registrationOnline(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, 400, "INVALID_ARGUMENT")
 		return
 	}
-	v, gaps, e := s.Deps.Registration.At(r.Context(), tenant(r), "", when)
+	v, gaps, e := store.At(r.Context(), tenant(r), "", when)
 	if e != nil {
 		failure(w, r, e)
 		return
@@ -48,7 +50,8 @@ func (s *Server) registrationOnline(w http.ResponseWriter, r *http.Request) {
 	jsonResponse(w, map[string]any{"items": online, "gaps": gaps, "uncertain": len(gaps) > 0})
 }
 func (s *Server) registrationEvents(w http.ResponseWriter, r *http.Request) {
-	if s.Deps.Registration == nil {
+	store := s.registration()
+	if store == nil {
 		writeError(w, r, 503, "FEATURE_UNAVAILABLE")
 		return
 	}
@@ -58,7 +61,7 @@ func (s *Server) registrationEvents(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, 400, "INVALID_ARGUMENT")
 		return
 	}
-	v, total, e := s.Deps.Registration.Events(r.Context(), tenant(r), r.URL.Query().Get("extension"), from, to, page, size)
+	v, total, e := store.Events(r.Context(), tenant(r), r.URL.Query().Get("extension"), from, to, page, size)
 	if e != nil {
 		failure(w, r, e)
 		return

@@ -47,8 +47,8 @@ type Deps struct {
 	History           History
 	Reports           Reports
 	Registry          *calls.Registry
-	Registration      *registration.Repository
-	Recordings        *recordings.Handler
+	Registration      func() *registration.Repository
+	Recordings        func() *recordings.Handler
 	Dashboard         *dashboard.Client
 	AMIEnabled        bool
 	StreamLifetime    time.Duration
@@ -107,6 +107,20 @@ func New(d Deps) (*Server, error) {
 		jsonResponse(w, map[string]string{"status": "ready"})
 	})
 	return s, nil
+}
+
+// registration and recordings may become available after start (opened late).
+func (s *Server) registration() *registration.Repository {
+	if s.Deps.Registration == nil {
+		return nil
+	}
+	return s.Deps.Registration()
+}
+func (s *Server) recordings() *recordings.Handler {
+	if s.Deps.Recordings == nil {
+		return nil
+	}
+	return s.Deps.Recordings()
 }
 func (s *Server) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

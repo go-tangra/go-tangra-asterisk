@@ -26,6 +26,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -43,9 +44,10 @@ type App struct {
 	Checker       httpapi.Checker
 	Listener      *ami.Listener
 	Registry      *calls.Registry
-	Registration  *registration.Repository
-	Recordings    *recordings.Handler
 	Log           *slog.Logger
+	registration  atomic.Pointer[registration.Repository]
+	recordings    atomic.Pointer[recordings.Handler]
+	openLate      []func(context.Context) // features Run keeps retrying to open
 	wg            sync.WaitGroup
 	closeOnce     sync.Once
 	meshClose     func() // closes the lcm identity provider (mesh_enroll)
@@ -108,23 +110,39 @@ func Build(ctx context.Context, c config.Config, o Options) (a *App, err error) 
 			a.Checker = newPermCache(AuthPerms{Client: authv1.NewAuthorizationClient(conn)}, 30*time.Second, 10000)
 		}
 	}
-	if c.Binding.RegistrationDSN != "" {
-		a.Registration, _ = registration.Open(ctx, c)
-		if a.Registration == nil {
-			a.Log.Warn("registration unavailable; bootstrap or database recovery required")
-		}
+	location, err := time.LoadLocation(c.Binding.Timezone)
+	if err != nil {
+		return nil, errors.New("invalid timezone")
+	}
+	source, err := time.LoadLocation(c.Binding.SourceTimezone)
+	if err != nil {
+		return nil, errors.New("invalid source timezone")
 	}
 	repo := &cdr.Repository{Pools: a.Pools}
-	location, _ := time.LoadLocation(c.Binding.Timezone)
 	reports := &stats.Repository{CDR: repo, Location: location}
+	if c.Binding.RegistrationDSN != "" {
+		a.feature(ctx, "registration", a.prune, func(ctx context.Context) error {
+			r, e := registration.Open(ctx, c)
+			if e != nil {
+				return e
+			}
+			a.registration.Store(r)
+			if a.Listener != nil {
+				a.Listener.Store.Store(r)
+			}
+			return nil
+		})
+	}
 	if c.Binding.RecordingRoot != "" {
-		a.Recordings, _ = recordings.New(c.Binding.RecordingRoot, repo)
-		if a.Recordings != nil {
-			a.Recordings.SourceLocation, _ = time.LoadLocation(c.Binding.SourceTimezone)
-		}
-		if a.Recordings == nil {
-			a.Log.Warn("recordings unavailable")
-		}
+		a.feature(ctx, "recordings", nil, func(context.Context) error {
+			h, e := recordings.New(c.Binding.RecordingRoot, repo)
+			if e != nil {
+				return e
+			}
+			h.SourceLocation = source
+			a.recordings.Store(h)
+			return nil
+		})
 	}
 	var metrics *dashboard.Client
 	if c.Binding.MonitoringURL != "" {
@@ -134,7 +152,7 @@ func Build(ctx context.Context, c config.Config, o Options) (a *App, err error) 
 		}
 	}
 	remote, _ := ui.Remote()
-	a.HTTP, err = httpapi.New(httpapi.Deps{Tenant: c.Binding.TenantID, Verifier: a.Verifier, Checker: a.Checker, History: repo, Reports: reports, Registry: a.Registry, Registration: a.Registration, Recordings: a.Recordings, Dashboard: metrics, AMIEnabled: c.AMI.Enabled, StreamLifetime: time.Duration(c.StreamSeconds) * time.Second, Ready: a.ready, Remote: remote, Stop: a.streamStop, RegistrationFresh: func() bool { return a.Listener != nil && a.Listener.RegistrationFresh.Load() }, Capabilities: func(ctx context.Context) map[string]httpapi.Capability {
+	a.HTTP, err = httpapi.New(httpapi.Deps{Tenant: c.Binding.TenantID, Verifier: a.Verifier, Checker: a.Checker, History: repo, Reports: reports, Registry: a.Registry, Registration: a.registration.Load, Recordings: a.recordings.Load, Dashboard: metrics, AMIEnabled: c.AMI.Enabled, StreamLifetime: time.Duration(c.StreamSeconds) * time.Second, Ready: a.ready, Remote: remote, Stop: a.streamStop, RegistrationFresh: func() bool { return a.Listener != nil && a.Listener.RegistrationFresh.Load() }, Capabilities: func(ctx context.Context) map[string]httpapi.Capability {
 		ready := a.ready(ctx) == nil
 		return map[string]httpapi.Capability{"history": {Available: ready, Fresh: ready}, "cel": {Available: a.Pools.CEL, Fresh: ready}, "quality": {Available: a.Pools.Columns["rtpqos"] || a.Pools.Columns["peerrtpqos"], Fresh: ready}, "names": {Available: a.Pools.Names, Fresh: ready}}
 	}})
@@ -143,18 +161,56 @@ func Build(ctx context.Context, c config.Config, o Options) (a *App, err error) 
 	}
 	a.Freya.HTTP().HandlePrefix("/", a.HTTP.Handler())
 	collector := exporter.New(a.Registry)
-	collector.SourceLocation, _ = time.LoadLocation(c.Binding.SourceTimezone)
+	collector.SourceLocation = source
 	a.qualityWorker = func(ctx context.Context) { collector.CollectQuality(ctx, repo) }
 	if err = a.metrics(collector); err != nil {
 		return nil, err
 	}
 	if c.AMI.Enabled {
-		a.Listener = &ami.Listener{Config: c.AMI, Registry: a.Registry, Store: a.Registration, OnError: func() { a.Log.Warn("AMI observation interrupted; retrying") }, OnContact: collector.Contact, OnFrame: collector.Frame, OnSweep: collector.BeginSweep}
+		a.Listener = &ami.Listener{Config: c.AMI, Registry: a.Registry, OnError: func() { a.Log.Warn("AMI observation interrupted; retrying") }, OnContact: collector.Contact, OnFrame: collector.Frame, OnSweep: collector.BeginSweep}
+		a.Listener.Store.Store(a.registration.Load())
 	}
 	if err = a.buildAdmin(); err != nil {
 		return nil, err
 	}
 	return a, nil
+}
+
+// Registration and Recordings return the feature once it is open, else nil.
+func (a *App) Registration() *registration.Repository { return a.registration.Load() }
+func (a *App) Recordings() *recordings.Handler        { return a.recordings.Load() }
+
+var retryDelay = time.Second
+
+// feature opens an optional feature now. On failure it logs the reason (the
+// open errors carry no DSN or secret) and Run retries with backoff, 1 s
+// doubling to 1 min, until it opens; then runs after, if any.
+func (a *App) feature(ctx context.Context, name string, after func(context.Context), open func(context.Context) error) {
+	e := open(ctx)
+	if e == nil {
+		return
+	}
+	a.Log.Warn(name+" unavailable; retrying in the background", "reason", e.Error())
+	a.openLate = append(a.openLate, func(ctx context.Context) {
+		for delay := retryDelay; ; delay = min(2*delay, time.Minute) {
+			if !pause(ctx, delay) {
+				return
+			}
+			attempt, cancel := context.WithTimeout(ctx, 15*time.Second)
+			e := open(attempt)
+			cancel()
+			if e == nil {
+				break
+			}
+			if ctx.Err() == nil {
+				a.Log.Warn(name+" still unavailable; retrying", "reason", e.Error())
+			}
+		}
+		a.Log.Info(name + " available")
+		if after != nil {
+			after(ctx)
+		}
+	})
 }
 func (a *App) ready(ctx context.Context) error {
 	if !a.Freya.Ready() {
@@ -164,12 +220,15 @@ func (a *App) ready(ctx context.Context) error {
 	return e
 }
 
-// pruneRegistration removes registration events past the retention, at start
-// and then hourly.
-func (a *App) pruneRegistration(ctx context.Context) {
+// prune removes registration events past the retention, at start and then
+// hourly.
+func (a *App) prune(ctx context.Context) {
+	if a.Cfg.Binding.RegistrationRetentionDays <= 0 {
+		return
+	}
 	for {
 		before := time.Now().AddDate(0, 0, -a.Cfg.Binding.RegistrationRetentionDays)
-		if _, err := a.Registration.Prune(ctx, before); err != nil && ctx.Err() == nil {
+		if _, err := a.registration.Load().Prune(ctx, before); err != nil && ctx.Err() == nil {
 			a.Log.Warn("registration retention prune failed; retrying next hour")
 		}
 		select {
@@ -207,8 +266,11 @@ func (a *App) Run(ctx context.Context) error {
 	if a.Listener != nil {
 		a.worker(wctx, a.Listener.Run)
 	}
-	if a.Registration != nil && a.Cfg.Binding.RegistrationRetentionDays > 0 {
-		a.worker(wctx, a.pruneRegistration)
+	if a.registration.Load() != nil {
+		a.worker(wctx, a.prune)
+	}
+	for _, open := range a.openLate {
+		a.worker(wctx, open)
 	}
 	a.worker(wctx, func(context.Context) {
 		if a.admin.Serve(a.adminListener) != nil {
@@ -224,11 +286,11 @@ func (a *App) Run(ctx context.Context) error {
 func (a *App) Close() {
 	a.closeOnce.Do(func() {
 		a.shutdownAdmin()
-		if a.Recordings != nil {
-			a.Recordings.Close()
+		if h := a.recordings.Load(); h != nil {
+			h.Close()
 		}
-		if a.Registration != nil {
-			a.Registration.DB.Close()
+		if r := a.registration.Load(); r != nil {
+			r.DB.Close()
 		}
 		if a.Pools != nil {
 			a.Pools.Close()

@@ -16,9 +16,10 @@ func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
 	if s.Deps.RegistrationFresh != nil {
 		captureFresh = s.Deps.RegistrationFresh()
 	}
-	out["registration"] = Capability{Available: s.Deps.Registration != nil, Fresh: captureFresh}
+	out["registration"] = Capability{Available: s.registration() != nil, Fresh: captureFresh}
 	out["live"] = Capability{Available: s.Deps.AMIEnabled, Fresh: s.Deps.Registry != nil && s.Deps.Registry.Snapshot().Fresh}
-	out["recordings"] = Capability{Available: s.Deps.Recordings != nil, Fresh: s.Deps.Recordings != nil}
+	recordings := s.recordings() != nil
+	out["recordings"] = Capability{Available: recordings, Fresh: recordings}
 	out["monitoring"] = Capability{Available: s.Deps.Dashboard != nil, Fresh: s.Deps.Dashboard != nil}
 	jsonResponse(w, out)
 }
