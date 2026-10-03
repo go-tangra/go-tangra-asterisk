@@ -162,7 +162,9 @@ func (r *Repository) RecoverGap(ctx context.Context) error {
 func (r *Repository) RestartGap(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, r.Timeout)
 	defer cancel()
-	_, e := r.DB.ExecContext(ctx, "INSERT INTO asterisk_observation_gaps(started_at) SELECT COALESCE(MAX(event_time),UTC_TIMESTAMP(3)) FROM pjsip_registration_events WHERE NOT EXISTS(SELECT 1 FROM asterisk_observation_gaps WHERE ended_at IS NULL)")
+	// The aggregate yields a row even when WHERE filters all events, so the
+	// open-gap guard applies to the aggregate's result, not to its input.
+	_, e := r.DB.ExecContext(ctx, "INSERT INTO asterisk_observation_gaps(started_at) SELECT last FROM (SELECT COALESCE(MAX(event_time),UTC_TIMESTAMP(3)) AS last FROM pjsip_registration_events) latest WHERE NOT EXISTS(SELECT 1 FROM asterisk_observation_gaps WHERE ended_at IS NULL)")
 	return e
 }
 func scan(rows *sql.Rows) ([]Event, error) {
