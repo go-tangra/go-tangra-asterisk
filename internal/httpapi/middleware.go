@@ -1,25 +1,50 @@
 package httpapi
 
 import (
+	"errors"
 	"github.com/go-tangra/go-tangra-auth/sdk/v4/pkg/authclient"
 	"net/http"
 )
 
 func (s *Server) protect(permission string, recording bool, next http.Handler) http.Handler {
+	required := []string{permission}
+	if recording {
+		required = append(required, "calls:read")
+		if permission != "recordings:read" {
+			required = append(required, "recordings:read")
+		}
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.Deps.Verifier == nil {
 			writeError(w, r, 401, "UNAUTHENTICATED")
 			return
 		}
 		id, e := s.Deps.Verifier.Verify(r.Context(), authclient.BearerToken(r.Header.Get("Authorization")))
+		if errors.Is(e, authclient.ErrStale) {
+			// The revocation feed is unreachable: verification is unavailable,
+			// the session is not known to be invalid.
+			writeError(w, r, 503, "DEPENDENCY_UNAVAILABLE")
+			return
+		}
 		if e != nil || id.UserID == "" || id.TenantID == "" {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="tangra"`)
 			writeError(w, r, 401, "UNAUTHENTICATED")
 			return
 		}
-		if id.TenantID != s.Deps.Tenant || s.Deps.Checker == nil || !s.Deps.Checker.Has(r.Context(), id.TenantID, id.UserID, permission) || (recording && (!s.Deps.Checker.Has(r.Context(), id.TenantID, id.UserID, "calls:read") || (permission != "recordings:read" && !s.Deps.Checker.Has(r.Context(), id.TenantID, id.UserID, "recordings:read")))) {
+		if id.TenantID != s.Deps.Tenant || s.Deps.Checker == nil {
 			writeError(w, r, 403, "FORBIDDEN")
 			return
+		}
+		for _, p := range required {
+			ok, e := s.Deps.Checker.Has(r.Context(), id.TenantID, id.UserID, p)
+			if e != nil {
+				writeError(w, r, 503, "DEPENDENCY_UNAVAILABLE")
+				return
+			}
+			if !ok {
+				writeError(w, r, 403, "FORBIDDEN")
+				return
+			}
 		}
 		next.ServeHTTP(w, r.WithContext(authclient.WithIdentity(r.Context(), id)))
 	})

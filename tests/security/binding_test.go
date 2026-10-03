@@ -20,10 +20,11 @@ func (v verifier) Verify(context.Context, string) (authclient.Identity, error) {
 type checker struct {
 	allow bool
 	deny  string
+	err   error
 }
 
-func (c checker) Has(_ context.Context, _, _, permission string) bool {
-	return c.allow && c.deny != permission
+func (c checker) Has(_ context.Context, _, _, permission string) (bool, error) {
+	return c.allow && c.deny != permission, c.err
 }
 func TestEveryRouteFailsClosed(t *testing.T) {
 	man, e := asteriskmanifest.Manifest()
@@ -35,7 +36,7 @@ func TestEveryRouteFailsClosed(t *testing.T) {
 		v      verifier
 		c      checker
 		status int
-	}{{"absent", verifier{err: errors.New("missing")}, checker{allow: true}, 401}, {"revoked", verifier{id: authclient.Identity{UserID: "u", TenantID: "t"}, err: errors.New("revoked")}, checker{allow: true}, 401}, {"foreign", verifier{id: authclient.Identity{UserID: "u", TenantID: "foreign"}}, checker{allow: true}, 403}, {"permission", verifier{id: authclient.Identity{UserID: "u", TenantID: "t"}}, checker{}, 403}} {
+	}{{"absent", verifier{err: errors.New("missing")}, checker{allow: true}, 401}, {"revoked", verifier{id: authclient.Identity{UserID: "u", TenantID: "t"}, err: errors.New("revoked")}, checker{allow: true}, 401}, {"foreign", verifier{id: authclient.Identity{UserID: "u", TenantID: "foreign"}}, checker{allow: true}, 403}, {"permission", verifier{id: authclient.Identity{UserID: "u", TenantID: "t"}}, checker{}, 403}, {"auth outage", verifier{id: authclient.Identity{UserID: "u", TenantID: "t"}}, checker{err: errors.New("unavailable")}, 503}, {"revocation feed stale", verifier{err: authclient.ErrStale}, checker{allow: true}, 503}} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, e := httpapi.New(httpapi.Deps{Tenant: "t", Verifier: tc.v, Checker: tc.c})
 			if e != nil {

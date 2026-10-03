@@ -62,7 +62,10 @@ func (s *Server) liveStream(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-heartbeat.C:
 			id, e := s.Deps.Verifier.Verify(r.Context(), authclient.BearerToken(r.Header.Get("Authorization")))
-			if e != nil || id.TenantID != tenant(r) || id.UserID != user(r) || !s.Deps.Checker.Has(r.Context(), id.TenantID, id.UserID, "live:read") {
+			if e != nil || id.TenantID != tenant(r) || id.UserID != user(r) {
+				return
+			}
+			if ok, e := s.Deps.Checker.Has(r.Context(), id.TenantID, id.UserID, "live:read"); e != nil || !ok {
 				return
 			}
 			_ = ctl.SetWriteDeadline(time.Now().Add(10 * time.Second))

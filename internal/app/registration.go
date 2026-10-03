@@ -2,24 +2,40 @@ package app
 
 import (
 	"context"
+	"errors"
 	"github.com/go-tangra/go-tangra-asterisk/v4/pkg/asteriskmanifest"
 	authv1 "github.com/go-tangra/go-tangra-auth/sdk/v4/api/proto/auth/v1"
 	"github.com/go-tangra/go-tangra-portal/sdk/v4/pkg/gatewayclient"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"strings"
 	"time"
 )
 
 type AuthPerms struct{ Client authv1.AuthorizationClient }
 
-func (p AuthPerms) Has(ctx context.Context, tenant, user, permission string) bool {
+var errAuthUnavailable = errors.New("authorization unavailable")
+
+// Has asks auth for a decision. Rejections of the request itself are denials;
+// any other failure (transport, timeout, auth down) is an error, never a deny.
+func (p AuthPerms) Has(ctx context.Context, tenant, user, permission string) (bool, error) {
 	resource, action, ok := strings.Cut(permission, ":")
-	if !ok || p.Client == nil {
-		return false
+	if !ok {
+		return false, nil
+	}
+	if p.Client == nil {
+		return false, errAuthUnavailable
 	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	res, e := p.Client.Check(ctx, &authv1.CheckRequest{TenantId: tenant, UserId: user, Resource: resource, Action: action})
-	return e == nil && res.GetAllowed()
+	switch status.Code(e) {
+	case codes.OK:
+		return res.GetAllowed(), nil
+	case codes.InvalidArgument, codes.NotFound, codes.PermissionDenied:
+		return false, nil
+	}
+	return false, errAuthUnavailable
 }
 func pause(ctx context.Context, d time.Duration) bool {
 	select {

@@ -25,8 +25,11 @@ import (
 type Verifier interface {
 	Verify(context.Context, string) (authclient.Identity, error)
 }
+
+// Checker decides a permission for tenant and user. An error means the
+// decision is unavailable (auth outage), not a denial.
 type Checker interface {
-	Has(context.Context, string, string, string) bool
+	Has(context.Context, string, string, string) (bool, error)
 }
 type History interface {
 	Detail(context.Context, string, string) (cdr.Detail, error)

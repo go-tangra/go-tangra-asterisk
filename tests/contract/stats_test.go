@@ -18,7 +18,7 @@ func (validIdentity) Verify(context.Context, string) (authclient.Identity, error
 
 type allow struct{}
 
-func (allow) Has(context.Context, string, string, string) bool { return true }
+func (allow) Has(context.Context, string, string, string) (bool, error) { return true, nil }
 
 type reports struct{}
 

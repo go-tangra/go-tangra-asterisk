@@ -26,7 +26,7 @@ func (s *sessions) Verify(context.Context, string) (authclient.Identity, error) 
 
 type checker struct{}
 
-func (checker) Has(context.Context, string, string, string) bool { return true }
+func (checker) Has(context.Context, string, string, string) (bool, error) { return true, nil }
 func TestSnapshotStreamRecoveryAndRevocation(t *testing.T) {
 	registry := calls.New()
 	registry.Reset(true)
