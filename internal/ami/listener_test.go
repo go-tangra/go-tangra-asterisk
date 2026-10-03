@@ -124,3 +124,62 @@ func TestIdleSessionPingsAndStays(t *testing.T) {
 		t.Fatal("live state went stale while the PBX was merely quiet")
 	}
 }
+
+// A frame split across a pause longer than the read timeout must be resumed,
+// not dropped: the session pings and the rest of the frame completes it.
+func TestFrameSplitAcrossTimeoutIsKept(t *testing.T) {
+	prev := idleTimeout
+	idleTimeout = 100 * time.Millisecond
+	defer func() { idleTimeout = prev }()
+	lis, e := net.Listen("tcp", "127.0.0.1:0")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer lis.Close()
+	logins := make(chan struct{}, 16)
+	go func() {
+		for {
+			conn, e := lis.Accept()
+			if e != nil {
+				return
+			}
+			go func(conn net.Conn) {
+				defer conn.Close()
+				r := bufio.NewReader(conn)
+				for {
+					m, e := ReadFrame(r)
+					if e != nil {
+						return
+					}
+					switch m["Action"] {
+					case "Login":
+						logins <- struct{}{}
+						fmt.Fprint(conn, "Asterisk Call Manager/5.0\r\nResponse: Success\r\n\r\n")
+					case "CoreShowChannels":
+						fmt.Fprint(conn, "Response: Success\r\nActionID: live-snapshot\r\n\r\nEvent: CoreShowChannel\r\nUniq")
+						time.Sleep(3 * idleTimeout / 2)
+						fmt.Fprint(conn, "ueid: a\r\nLinkedid: call\r\nChannel: PJSIP/01-1\r\n\r\nEvent: CoreShowChannelsComplete\r\nActionID: live-snapshot\r\n\r\n")
+					case "Ping":
+						fmt.Fprint(conn, "Response: Success\r\nPing: Pong\r\n\r\n")
+					}
+				}
+			}(conn)
+		}
+	}()
+	registry := calls.New()
+	l := Listener{Config: config.AMI{Address: lis.Addr().String(), Username: "observer", Secret: "secret"}, Registry: registry}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { l.Run(ctx); close(done) }()
+	defer func() { cancel(); <-done }()
+	deadline := time.Now().Add(2 * time.Second)
+	for !registry.Snapshot().Fresh && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if snapshot := registry.Snapshot(); !snapshot.Fresh || len(snapshot.Calls) != 1 {
+		t.Fatalf("split frame lost: %+v", snapshot)
+	}
+	if n := len(logins); n != 1 {
+		t.Fatalf("logins = %d; the paused frame dropped the session", n)
+	}
+}

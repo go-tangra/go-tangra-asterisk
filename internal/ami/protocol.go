@@ -7,18 +7,32 @@ import (
 	"strings"
 )
 
-func ReadFrame(r *bufio.Reader) (map[string]string, error) {
-	m := map[string]string{}
-	size := 0
+// FrameReader reads AMI frames. A read error (a deadline expiring mid-frame)
+// keeps the partial line and fields, so the next Next resumes the frame.
+type FrameReader struct {
+	r    *bufio.Reader
+	m    map[string]string
+	raw  []byte
+	size int
+}
+
+func NewFrameReader(r *bufio.Reader) *FrameReader { return &FrameReader{r: r} }
+
+func ReadFrame(r *bufio.Reader) (map[string]string, error) { return NewFrameReader(r).Next() }
+
+func (f *FrameReader) Next() (map[string]string, error) {
+	if f.m == nil {
+		f.m = map[string]string{}
+	}
 	for {
-		var raw []byte
 		for {
-			piece, e := r.ReadSlice('\n')
-			size += len(piece)
-			if size > 65536 {
+			piece, e := f.r.ReadSlice('\n')
+			f.size += len(piece)
+			if f.size > 65536 {
+				f.m, f.raw, f.size = nil, nil, 0
 				return nil, errors.New("AMI frame exceeds bound")
 			}
-			raw = append(raw, piece...)
+			f.raw = append(f.raw, piece...)
 			if e == bufio.ErrBufferFull {
 				continue
 			}
@@ -27,18 +41,20 @@ func ReadFrame(r *bufio.Reader) (map[string]string, error) {
 			}
 			break
 		}
-		line := string(raw)
-
-		line = strings.TrimRight(line, "\r\n")
+		line := strings.TrimRight(string(f.raw), "\r\n")
+		f.raw = f.raw[:0]
 		if line == "" {
-			if len(m) > 0 {
+			if len(f.m) > 0 {
+				m := f.m
+				f.m, f.size = nil, 0
 				return m, nil
 			}
+			f.size = 0
 			continue
 		}
 		k, v, ok := strings.Cut(line, ":")
 		if ok {
-			m[k] = strings.TrimSpace(v)
+			f.m[k] = strings.TrimSpace(v)
 		}
 	}
 }

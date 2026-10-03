@@ -131,12 +131,12 @@ func (l *Listener) session(ctx context.Context) error {
 		case <-done:
 		}
 	}()
-	r := bufio.NewReaderSize(conn, 65536)
+	r := NewFrameReader(bufio.NewReaderSize(conn, 65536))
 	conn.SetDeadline(time.Now().Add(10 * time.Second))
 	if err = WriteAction(conn, "Login", map[string]string{"Username": l.Config.Username, "Secret": l.Config.Secret, "Events": "on"}); err != nil {
 		return err
 	}
-	m, err := ReadFrame(r)
+	m, err := r.Next()
 	if err != nil || m["Response"] != "Success" {
 		return errors.New("AMI login rejected")
 	}
@@ -182,7 +182,7 @@ func (l *Listener) session(ctx context.Context) error {
 	}
 	for ctx.Err() == nil {
 		conn.SetDeadline(time.Now().Add(idleTimeout))
-		m, err = ReadFrame(r)
+		m, err = r.Next()
 		if err != nil {
 			if n, ok := err.(net.Error); ok && n.Timeout() {
 				// The expired read deadline also fails writes: renew it before
@@ -199,7 +199,8 @@ func (l *Listener) session(ctx context.Context) error {
 						return err
 					}
 				}
-				m, err = ReadFrame(r)
+				// A frame cut by the deadline resumes where it stopped.
+				m, err = r.Next()
 			}
 			if err != nil {
 				return err
