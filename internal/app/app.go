@@ -105,7 +105,7 @@ func Build(ctx context.Context, c config.Config, o Options) (a *App, err error) 
 			a.Verifier = authclient.New(authclient.Config{Issuer: c.Gateway.Issuer}, authclient.GRPCKeys{Client: authv1.NewKeysClient(conn)}, authclient.GRPCRevocations{Client: authv1.NewSessionsClient(conn)})
 		}
 		if a.Checker == nil {
-			a.Checker = AuthPerms{Client: authv1.NewAuthorizationClient(conn)}
+			a.Checker = newPermCache(AuthPerms{Client: authv1.NewAuthorizationClient(conn)}, 30*time.Second, 10000)
 		}
 	}
 	if c.Binding.RegistrationDSN != "" {
