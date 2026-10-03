@@ -103,11 +103,13 @@ func Aggregate(calls []cdr.Call, loc *time.Location, bucket string) Overview {
 			if c.Direction == "outbound" {
 				e.Outbound++
 			}
-			ownsAnswer := c.AnsweredExtension == id || (c.Direction == "outbound" && c.OriginatingExtension == id)
+			// The caller of an answered outbound or internal call sees it answered.
+			caller := (c.Direction == "outbound" || c.Direction == "internal") && c.OriginatingExtension == id
+			ownsAnswer := c.AnsweredExtension == id || caller
 			if c.Disposition == "ANSWERED" && ownsAnswer {
 				e.Answered++
 				e.TalkSeconds += c.Talk
-				if c.Pickup != nil {
+				if c.Pickup != nil && (c.AnsweredExtension == id || c.Direction == "outbound") {
 					e.pickupSum += *c.Pickup
 					e.pickupN++
 				}
