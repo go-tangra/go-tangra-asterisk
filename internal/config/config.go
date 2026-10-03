@@ -16,12 +16,17 @@ import (
 )
 
 type Config struct {
-	fconfig.Config      `yaml:",inline"`
-	Binding             Binding `yaml:"binding"`
-	AMI                 AMI     `yaml:"ami"`
-	Gateway             Gateway `yaml:"gateway"`
-	QueryTimeoutSeconds int     `yaml:"query_timeout_seconds"`
-	StreamSeconds       int     `yaml:"stream_seconds"`
+	fconfig.Config `yaml:",inline"`
+	Binding        Binding `yaml:"binding"`
+	AMI            AMI     `yaml:"ami"`
+	Gateway        Gateway `yaml:"gateway"`
+	// MeshEnroll obtains the module's mesh SPIFFE SVID by enrolling with lcm
+	// over the network (identity.provider: provided), as every go-tangra v4
+	// module does; a SPIRE workload socket (identity.provider: spiffe) remains
+	// possible where SPIRE runs.
+	MeshEnroll          MeshEnroll `yaml:"mesh_enroll"`
+	QueryTimeoutSeconds int        `yaml:"query_timeout_seconds"`
+	StreamSeconds       int        `yaml:"stream_seconds"`
 }
 type Binding struct {
 	TenantID          string `yaml:"tenant_id"`
@@ -38,6 +43,17 @@ type Binding struct {
 	SourceTimezone            string `yaml:"source_timezone"`
 	MonitoringURL             string `yaml:"monitoring_url" json:"-"`
 	MonitoringDedicated       bool   `yaml:"monitoring_dedicated"`
+}
+
+// MeshEnroll configures lcm network enrollment for the module's own SVID.
+type MeshEnroll struct {
+	Enabled       bool   `yaml:"enabled"`
+	EnrollURL     string `yaml:"enroll_url"`
+	LCMGRPCTarget string `yaml:"lcm_grpc"`
+	TenantID      string `yaml:"tenant_id"`
+	TokenFile     string `yaml:"token_file" json:"-"`
+	StateFile     string `yaml:"state_file"`
+	Insecure      bool   `yaml:"insecure"`
 }
 type AMI struct {
 	Address  string `yaml:"address"`
@@ -75,6 +91,14 @@ func Load(path string) (Config, error) {
 func (c Config) Validate() error {
 	if e := c.Config.Validate(); e != nil {
 		return e
+	}
+	if m := c.MeshEnroll; m.Enabled {
+		if m.EnrollURL == "" || m.LCMGRPCTarget == "" || m.TenantID == "" || m.TokenFile == "" {
+			return errors.New("mesh_enroll requires enroll_url, lcm_grpc, tenant_id and token_file")
+		}
+		if c.Config.Identity.Provider != "provided" {
+			return errors.New("mesh_enroll requires identity.provider: provided")
+		}
 	}
 	if c.Binding.TenantID == "" || c.Binding.PBXID == "" {
 		return errors.New("exclusive tenant_id and pbx_id required")

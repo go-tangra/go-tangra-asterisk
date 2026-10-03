@@ -40,6 +40,8 @@ github.com/go-sql-driver/mysql v1.9.3 h1:U/N249h2WzJ3Ukj8SowVFjdtZKfu9vlLZxjPXV1
 github.com/go-sql-driver/mysql v1.9.3/go.mod h1:qn46aNg1333BRMNU69Lq93t8du/dwxI64Gl8i5p1WMU=
 github.com/go-tangra/go-tangra-auth/sdk/v4 v4.1.0 h1:q6+AsniLuSmSj6/NBuDdWDwHFCmQD4aF+boWeMiecfQ=
 github.com/go-tangra/go-tangra-auth/sdk/v4 v4.1.0/go.mod h1:kzKB/d8rnaEIYH2ZS5kQWAXXz8zdhfndytNs/dvQfOM=
+github.com/go-tangra/go-tangra-lcm/sdk/v4 v4.1.0 h1:KjAVJn8jAZbcIyL6B3yasngtFTxwBA1s9y7TW1ylqjc=
+github.com/go-tangra/go-tangra-lcm/sdk/v4 v4.1.0/go.mod h1:j/24DHoyBPfYcHzehJKkQLL/s1jDPToGr/LqV/qA/HM=
 github.com/go-tangra/go-tangra-portal/sdk/v4 v4.1.0 h1:vER2dKZi79h1Q4AvLyLmrcJ47vAa6jY5AlvUl+kXIiw=
 github.com/go-tangra/go-tangra-portal/sdk/v4 v4.1.0/go.mod h1:SKP6ZWoKPtYo7IZboDjGZW3rbGnKtSBr7I24EoLT2Bk=
 github.com/go-tangra/go-tangra/v4 v4.3.1 h1:wPPjsVjuwvelKKzrDZrEDDCPXm0Zs5eQt4dsQKqyxiE=

@@ -1,6 +1,6 @@
 [Unit]
 Description=Tangra V4 Asterisk observer
-After=network-online.target spire-agent.service
+After=network-online.target
 Wants=network-online.target
 [Service]
 User=tangra-asterisk
@@ -15,7 +15,9 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadOnlyPaths=/var/spool/asterisk/monitor /run/spire/sockets
+ReadOnlyPaths=/var/spool/asterisk/monitor
+# lcm enrollment state (mesh_enroll.state_file)
+StateDirectory=tangra-asterisk
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 [Install]
 WantedBy=multi-user.target

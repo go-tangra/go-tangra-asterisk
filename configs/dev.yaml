@@ -1,9 +1,18 @@
 service_name: asterisk
 trust_domain: tangra.local
 env: development
+# The module obtains its mesh SVID by enrolling with lcm over the network,
+# like every go-tangra v4 module (a SPIRE agent is not required; with one,
+# use identity.provider: spiffe and workload_socket instead).
 identity:
-  provider: spiffe
-  workload_socket: unix:///run/spire/sockets/agent.sock
+  provider: provided
+mesh_enroll:
+  enabled: true
+  enroll_url: ${ASTERISK_ENROLL_URL}
+  lcm_grpc: ${ASTERISK_LCM_GRPC}
+  tenant_id: ${ASTERISK_ENROLL_TENANT_ID}
+  token_file: ${ASTERISK_ENROLL_TOKEN_FILE}
+  state_file: ${ASTERISK_ENROLL_STATE_FILE}
 authz:
   source: file
   path: deploy/policy.yaml

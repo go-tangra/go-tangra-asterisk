@@ -10,7 +10,9 @@ services:
     volumes:
       - ../configs/dev.yaml:/etc/asterisk-module/config.yaml:ro
       - ./policy.yaml:/etc/asterisk-module/deploy/policy.yaml:ro
-      - /run/spire/sockets:/run/spire/sockets:ro
+      # lcm enrollment: the one-time token and the SVID state (writable).
+      - ${ASTERISK_ENROLL_TOKEN_HOST_FILE:-./asterisk.token}:/run/secrets/asterisk.token:ro
+      - asterisk-state:/var/lib/asterisk-module
       - /var/spool/asterisk/monitor:/recordings:ro
     tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
     networks: [mesh]
@@ -18,6 +20,8 @@ services:
 secrets:
   npm_token:
     environment: NODE_AUTH_TOKEN
+volumes:
+  asterisk-state:
 networks:
   mesh:
     external: true

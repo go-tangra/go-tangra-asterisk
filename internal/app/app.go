@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/ami"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/calls"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/cdr"
@@ -17,11 +18,13 @@ import (
 	"github.com/go-tangra/go-tangra-asterisk/v4/ui"
 	authv1 "github.com/go-tangra/go-tangra-auth/sdk/v4/api/proto/auth/v1"
 	"github.com/go-tangra/go-tangra-auth/sdk/v4/pkg/authclient"
+	"github.com/go-tangra/go-tangra-lcm/sdk/v4/pkg/lcmidentity"
 	freya "github.com/go-tangra/go-tangra/v4"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -45,6 +48,7 @@ type App struct {
 	Log           *slog.Logger
 	wg            sync.WaitGroup
 	closeOnce     sync.Once
+	meshClose     func() // closes the lcm identity provider (mesh_enroll)
 	admin         *http.Server
 	adminListener net.Listener
 	streamStop    chan struct{}
@@ -65,7 +69,25 @@ func Build(ctx context.Context, c config.Config, o Options) (a *App, err error) 
 	}()
 	runtimeCfg := c.Config
 	runtimeCfg.Admin.Addr = "127.0.0.1:0"
-	if a.Freya, err = freya.New(runtimeCfg, o.Freya...); err != nil {
+	fopts := append([]freya.Option(nil), o.Freya...)
+	if c.MeshEnroll.Enabled {
+		// Mesh identity: enroll for the module's own SPIFFE SVID over lcm.
+		raw, rerr := os.ReadFile(c.MeshEnroll.TokenFile)
+		if rerr != nil {
+			return nil, errors.New("mesh enroll token unreadable")
+		}
+		prov, perr := lcmidentity.NewNet(ctx, lcmidentity.NetConfig{
+			EnrollURL: c.MeshEnroll.EnrollURL, LCMGRPCTarget: c.MeshEnroll.LCMGRPCTarget,
+			TenantID: c.MeshEnroll.TenantID, TrustDomain: c.Config.TrustDomain, ServiceName: c.Config.ServiceName,
+			EnrollmentToken: strings.TrimSpace(string(raw)), Insecure: c.MeshEnroll.Insecure, StateFile: c.MeshEnroll.StateFile,
+		})
+		if perr != nil {
+			return nil, fmt.Errorf("mesh enroll: %w", perr)
+		}
+		a.meshClose = func() { _ = prov.Close() }
+		fopts = append(fopts, freya.WithIdentityProvider(prov))
+	}
+	if a.Freya, err = freya.New(runtimeCfg, fopts...); err != nil {
 		return nil, errors.New("secure runtime initialization failed")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
@@ -220,6 +242,9 @@ func (a *App) Close() {
 				_ = a.Freya.Run(cleanup)
 			}
 			a.Freya.Close()
+		}
+		if a.meshClose != nil {
+			a.meshClose()
 		}
 	})
 }
