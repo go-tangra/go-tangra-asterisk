@@ -21,5 +21,9 @@ func (s *Server) capabilities(w http.ResponseWriter, r *http.Request) {
 	recordings := s.recordings() != nil
 	out["recordings"] = Capability{Available: recordings, Fresh: recordings}
 	out["monitoring"] = Capability{Available: s.Deps.Dashboard != nil, Fresh: s.Deps.Dashboard != nil}
-	jsonResponse(w, out)
+	body := map[string]any{"timezone": s.Deps.Timezone}
+	for k, v := range out {
+		body[k] = v
+	}
+	jsonResponse(w, body)
 }

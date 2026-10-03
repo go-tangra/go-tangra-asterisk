@@ -1815,6 +1815,15 @@
       },
       "Capabilities": {
         "type": "object",
+        "description": "Feature availability by name; timezone is the reporting timezone (IANA name) that statistics buckets use.",
+        "required": [
+          "timezone"
+        ],
+        "properties": {
+          "timezone": {
+            "type": "string"
+          }
+        },
         "additionalProperties": {
           "$ref": "#/components/schemas/Capability"
         }

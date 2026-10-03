@@ -42,6 +42,7 @@ type Reports interface {
 }
 type Deps struct {
 	Tenant            string
+	Timezone          string
 	Verifier          Verifier
 	Checker           Checker
 	History           History

@@ -58,3 +58,20 @@ func TestFeaturesBecomeAvailableLate(t *testing.T) {
 		t.Fatal("late-opened features not reported available")
 	}
 }
+func TestCapabilitiesReportTimezone(t *testing.T) {
+	s, e := httpapi.New(httpapi.Deps{Tenant: "t", Timezone: "Europe/Sofia", Verifier: validIdentity{}, Checker: allow{}})
+	if e != nil {
+		t.Fatal(e)
+	}
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/api/asterisk/capabilities", nil))
+	var out map[string]json.RawMessage
+	if e = json.Unmarshal(w.Body.Bytes(), &out); e != nil {
+		t.Fatal(e)
+	}
+	var tz string
+	var live httpapi.Capability
+	if json.Unmarshal(out["timezone"], &tz) != nil || tz != "Europe/Sofia" || json.Unmarshal(out["live"], &live) != nil {
+		t.Fatalf("%s", w.Body.String())
+	}
+}
