@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { UiPage, UiAlert, UiCard, UiInput, UiSelect, UiDataTable, type Column } from '@go-tangra/ui'
 import { get, explain } from '@/api/client'
 import type { Call, Page, Capabilities } from '@/api/types'
 import { usePeriod } from '@/components/period'
 import PeriodFilter from '@/components/PeriodFilter.vue'
 import CallDrawer from './call-drawer.vue'
+import { useLatest } from '@/components/latest'
 import { useRowActivation } from '@/components/rows'
 const {from,to,query}=usePeriod()
 const src=ref(''),dst=ref(''),extension=ref(''),direction=ref(''),disposition=ref('')
 const page=ref(1),size=ref(25),sort=ref({key:'start',dir:'desc' as 'asc'|'desc'})
 const result=ref<Page<Call>>(),caps=ref<Capabilities>({}),selected=ref(''),error=ref(''),loading=ref(false)
-let controller:AbortController|undefined
-async function load(reset=false){if(reset)page.value=1;controller?.abort();controller=new AbortController();const active=controller;error.value='';loading.value=true;try{result.value=await get<Page<Call>>('/api/asterisk/calls',{...query(),src:src.value,dst:dst.value,extension:extension.value,direction:direction.value,disposition:disposition.value,page:page.value,page_size:size.value,sort:sort.value.key,order:sort.value.dir},{},controller.signal)}catch(e){if(!(e instanceof DOMException && e.name==='AbortError'))error.value=explain(e)}finally{if(controller===active)loading.value=false}}
-onMounted(async()=>{try{caps.value=await get<Capabilities>('/api/asterisk/capabilities')}catch(e){error.value=explain(e)};await load()});onUnmounted(()=>controller?.abort())
+const latest=useLatest()
+async function load(reset=false){if(reset)page.value=1;const signal=latest.start();error.value='';loading.value=true;try{const v=await get<Page<Call>>('/api/asterisk/calls',{...query(),src:src.value,dst:dst.value,extension:extension.value,direction:direction.value,disposition:disposition.value,page:page.value,page_size:size.value,sort:sort.value.key,order:sort.value.dir},{},signal);if(!signal.aborted)result.value=v}catch(e){if(!signal.aborted)error.value=explain(e)}finally{if(!signal.aborted)loading.value=false}}
+onMounted(async()=>{try{caps.value=await get<Capabilities>('/api/asterisk/capabilities')}catch(e){error.value=explain(e)};await load()})
 const rows=useRowActivation<Call>(c=>c.linkedid,c=>'Open call '+c.linkedid+' from '+(c.src||'unknown')+' to '+(c.dst||'unknown'),()=>result.value?.items??[],c=>{selected.value=c.linkedid})
 const columns:Column<Call>[]=[{key:'start',label:'Started',sortable:true,format:c=>new Date(c.start).toLocaleString()},{key:'src',label:'Caller',sortable:true},{key:'dst',label:'Destination',sortable:true},{key:'direction',label:'Direction'},{key:'disposition',label:'Outcome'},{key:'durationSeconds',label:'Duration (s)',sortable:true},{key:'answeredExtension',label:'Answered by'},{key:'linkedid',label:'Call ID'}]
 </script>

@@ -5,9 +5,11 @@ import { get, explain } from '@/api/client'
 import type { Overview, Bucket, Ringgroup } from '@/api/types'
 import { usePeriod } from '@/components/period'
 import PeriodFilter from '@/components/PeriodFilter.vue'
+import { useLatest } from '@/components/latest'
 const {from,to,query}=usePeriod();const bucket=ref('day'),data=ref<Overview>(),ring=ref<Ringgroup>(),group=ref('600'),error=ref('')
-async function load(){error.value='';try{data.value=await get<Overview>('/api/asterisk/stats/overview',{...query(),bucket:bucket.value})}catch(e){error.value=explain(e)}}
-async function drill(){error.value='';try{ring.value=await get<Ringgroup>('/api/asterisk/stats/ringgroups/{ring_group}',query(),{ring_group:group.value})}catch(e){error.value=explain(e)}}
+const overview=useLatest(),ringgroup=useLatest()
+async function load(){const signal=overview.start();error.value='';try{const v=await get<Overview>('/api/asterisk/stats/overview',{...query(),bucket:bucket.value},{},signal);if(!signal.aborted)data.value=v}catch(e){if(!signal.aborted)error.value=explain(e)}}
+async function drill(){const signal=ringgroup.start();error.value='';try{const v=await get<Ringgroup>('/api/asterisk/stats/ringgroups/{ring_group}',query(),{ring_group:group.value},signal);if(!signal.aborted)ring.value=v}catch(e){if(!signal.aborted)error.value=explain(e)}}
 onMounted(load)
 const columns:Column<Bucket>[]=[{key:'start',label:'Bucket',format:b=>new Date(b.start).toLocaleString(undefined,{timeZone:data.value?.timezone??'Europe/Sofia'})},{key:'total',label:'Calls'},{key:'answered',label:'Answered'},{key:'missed',label:'Missed'}]
 </script>
