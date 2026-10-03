@@ -63,3 +63,64 @@ func TestContactFieldCompatibility(t *testing.T) {
 		t.Fatalf("%+v", e)
 	}
 }
+
+// A quiet PBX (no events for longer than the idle timeout) must keep its
+// session: the listener pings and goes on reading instead of reconnecting.
+func TestIdleSessionPingsAndStays(t *testing.T) {
+	prev := idleTimeout
+	idleTimeout = 100 * time.Millisecond
+	defer func() { idleTimeout = prev }()
+	lis, e := net.Listen("tcp", "127.0.0.1:0")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer lis.Close()
+	logins := make(chan struct{}, 16)
+	pings := make(chan struct{}, 64)
+	go func() {
+		for {
+			conn, e := lis.Accept()
+			if e != nil {
+				return
+			}
+			go func(conn net.Conn) {
+				defer conn.Close()
+				r := bufio.NewReader(conn)
+				for {
+					m, e := ReadFrame(r)
+					if e != nil {
+						return
+					}
+					switch m["Action"] {
+					case "Login":
+						logins <- struct{}{}
+						fmt.Fprint(conn, "Asterisk Call Manager/5.0\r\nResponse: Success\r\n\r\n")
+					case "CoreShowChannels":
+						fmt.Fprint(conn, "Response: Success\r\nActionID: live-snapshot\r\n\r\nEvent: CoreShowChannelsComplete\r\nActionID: live-snapshot\r\n\r\n")
+					case "PJSIPShowContacts":
+						fmt.Fprint(conn, "Response: Success\r\nActionID: contact-snapshot\r\n\r\nEvent: ContactListComplete\r\nActionID: contact-snapshot\r\n\r\n")
+					case "Ping":
+						pings <- struct{}{}
+						fmt.Fprint(conn, "Response: Success\r\nPing: Pong\r\n\r\n")
+					}
+				}
+			}(conn)
+		}
+	}()
+	registry := calls.New()
+	l := Listener{Config: config.AMI{Address: lis.Addr().String(), Username: "observer", Secret: "secret"}, Registry: registry}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { l.Run(ctx); close(done) }()
+	defer func() { cancel(); <-done }()
+	time.Sleep(10 * idleTimeout)
+	if n := len(logins); n != 1 {
+		t.Fatalf("logins = %d; the idle session was dropped and re-established", n)
+	}
+	if len(pings) < 3 {
+		t.Fatalf("pings = %d; the idle session did not keep pinging", len(pings))
+	}
+	if !registry.Snapshot().Fresh {
+		t.Fatal("live state went stale while the PBX was merely quiet")
+	}
+}

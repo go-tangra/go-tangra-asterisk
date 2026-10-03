@@ -37,6 +37,10 @@ type Listener struct {
 // every minute, well inside this margin.
 const RefreshAhead = 10 * time.Minute
 
+// idleTimeout is how long a read waits for an AMI frame before the session
+// pings the PBX to tell a quiet PBX from a dead connection.
+var idleTimeout = 5 * time.Second
+
 // ShouldStore reports whether e must be written given the last stored row
 // prev of the same endpoint and contact: on any change other than the expiry
 // (status, AOR, user agent, address), when the expiry moves earlier or appears
@@ -177,10 +181,13 @@ func (l *Listener) session(ctx context.Context) error {
 		}
 	}
 	for ctx.Err() == nil {
-		conn.SetDeadline(time.Now().Add(5 * time.Second))
+		conn.SetDeadline(time.Now().Add(idleTimeout))
 		m, err = ReadFrame(r)
 		if err != nil {
 			if n, ok := err.(net.Error); ok && n.Timeout() {
+				// The expired read deadline also fails writes: renew it before
+				// pinging, or every idle period drops the session.
+				conn.SetDeadline(time.Now().Add(idleTimeout))
 				if WriteAction(conn, "Ping", nil) != nil {
 					return err
 				}
@@ -192,7 +199,6 @@ func (l *Listener) session(ctx context.Context) error {
 						return err
 					}
 				}
-				conn.SetDeadline(time.Now().Add(5 * time.Second))
 				m, err = ReadFrame(r)
 			}
 			if err != nil {
