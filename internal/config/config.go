@@ -75,41 +75,73 @@ func Default() Config {
 	return Config{Config: f, Binding: Binding{Timezone: "Europe/Sofia", SourceTimezone: "Europe/Sofia", RegistrationRetentionDays: 400}, Gateway: Gateway{Service: "gateway"}, QueryTimeoutSeconds: 5, StreamSeconds: 240}
 }
 func Load(path string) (Config, error) {
+	c, e := Parse(path)
+	if e != nil {
+		return c, e
+	}
+	return c, c.Validate()
+}
+
+// ErrUnavailable and ErrInvalid are Parse's refusals; ParseError keeps the
+// decoder's detail for preflight (the service itself reports neither).
+var (
+	ErrUnavailable = errors.New("configuration file unavailable")
+	ErrInvalid     = errors.New("invalid configuration document")
+)
+
+// ParseError wraps ErrInvalid with the YAML decoder's error.
+type ParseError struct{ Err error }
+
+func (e ParseError) Error() string { return ErrInvalid.Error() }
+func (e ParseError) Unwrap() error { return ErrInvalid }
+
+// Parse reads and decodes the file like Load (environment expanded, unknown
+// keys refused) without validating it.
+func Parse(path string) (Config, error) {
 	c := Default()
 	raw, e := os.ReadFile(path)
 	if e != nil {
-		return c, errors.New("configuration file unavailable")
+		return c, ErrUnavailable
 	}
 	raw = []byte(os.ExpandEnv(string(raw)))
 	d := yaml.NewDecoder(bytes.NewReader(raw))
 	d.KnownFields(true)
-	if d.Decode(&c) != nil {
-		return c, errors.New("invalid configuration document")
+	if e := d.Decode(&c); e != nil {
+		return c, ParseError{e}
 	}
-	return c, c.Validate()
+	return c, nil
 }
+
+// Validate returns the first validation error (service start).
 func (c Config) Validate() error {
-	if e := c.Config.Validate(); e != nil {
-		return e
+	if errs := c.ValidateAll(); len(errs) > 0 {
+		return errs[0]
 	}
+	return nil
+}
+
+// ValidateAll returns every validation error, framework ones first.
+func (c Config) ValidateAll() []error {
+	errs := c.Config.ValidateAll()
+	fail := func(msg string) { errs = append(errs, errors.New(msg)) }
 	if m := c.MeshEnroll; m.Enabled {
 		if m.EnrollURL == "" || m.LCMGRPCTarget == "" || m.TenantID == "" || m.TokenFile == "" {
-			return errors.New("mesh_enroll requires enroll_url, lcm_grpc, tenant_id and token_file")
+			fail("mesh_enroll requires enroll_url, lcm_grpc, tenant_id and token_file")
 		}
 		if c.Config.Identity.Provider != "provided" {
-			return errors.New("mesh_enroll requires identity.provider: provided")
+			fail("mesh_enroll requires identity.provider: provided")
 		}
 	}
 	if c.Binding.TenantID == "" || c.Binding.PBXID == "" {
-		return errors.New("exclusive tenant_id and pbx_id required")
+		fail("exclusive tenant_id and pbx_id required")
 	}
 	if c.Binding.CDRDSN == "" {
-		return errors.New("binding.cdr_dsn required")
+		fail("binding.cdr_dsn required")
 	}
-	for _, dsn := range []string{c.Binding.CDRDSN, c.Binding.ConfigDSN, c.Binding.RegistrationDSN} {
-		if dsn != "" {
-			if _, e := mysql.ParseDSN(dsn); e != nil {
-				return errors.New("invalid database DSN")
+	for _, d := range []struct{ name, dsn string }{{"cdr_dsn", c.Binding.CDRDSN}, {"config_dsn", c.Binding.ConfigDSN}, {"registration_dsn", c.Binding.RegistrationDSN}} {
+		if d.dsn != "" {
+			if _, e := mysql.ParseDSN(d.dsn); e != nil {
+				fail("invalid database DSN: binding." + d.name)
 			}
 		}
 	}
@@ -121,43 +153,43 @@ func (c Config) Validate() error {
 			}
 			source, _ := mysql.ParseDSN(dsn)
 			if owned.Net == source.Net && owned.Addr == source.Addr && owned.DBName == source.DBName {
-				return errors.New("registration database must be module-owned and separate from PBX sources")
+				fail("registration database must be module-owned and separate from PBX sources")
 			}
 		}
 	}
 
-	for _, tz := range []string{c.Binding.Timezone, c.Binding.SourceTimezone} {
-		if _, e := time.LoadLocation(tz); e != nil {
-			return errors.New("invalid timezone")
+	for _, tz := range []struct{ name, zone string }{{"timezone", c.Binding.Timezone}, {"source_timezone", c.Binding.SourceTimezone}} {
+		if _, e := time.LoadLocation(tz.zone); e != nil {
+			fail("invalid timezone: binding." + tz.name)
 		}
 	}
 	if c.Limits.RequestTimeout < time.Duration(c.StreamSeconds)*time.Second {
-		return errors.New("framework request_timeout must cover stream_seconds")
+		fail("framework request_timeout must cover stream_seconds")
 	}
 	if c.Binding.RegistrationRetentionDays < 0 || c.Binding.RegistrationRetentionDays > 3650 {
-		return errors.New("registration_retention_days must be 0 (keep forever) to 3650")
+		fail("registration_retention_days must be 0 (keep forever) to 3650")
 	}
 	if c.QueryTimeoutSeconds < 1 || c.QueryTimeoutSeconds > 30 || c.StreamSeconds < 1 || c.StreamSeconds > 300 {
-		return errors.New("invalid query/stream bounds")
+		fail("invalid query/stream bounds")
 	}
 	if c.AMI.Enabled {
 		if _, _, e := net.SplitHostPort(c.AMI.Address); e != nil || c.AMI.Username == "" || c.AMI.Secret == "" {
-			return errors.New("AMI credentials/address required")
+			fail("AMI credentials/address required")
 		}
 	}
 	if c.Binding.RecordingRoot != "" && !filepath.IsAbs(c.Binding.RecordingRoot) {
-		return errors.New("recording_root must be absolute")
+		fail("recording_root must be absolute")
 	}
 	if c.Binding.MonitoringURL != "" {
 		u, e := url.Parse(c.Binding.MonitoringURL)
 		if e != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || !c.Binding.MonitoringDedicated {
-			return errors.New("dedicated monitoring upstream required")
+			fail("dedicated monitoring upstream required")
 		}
 	}
 	if c.Gateway.Issuer == "" || c.Gateway.Service == "" {
-		return errors.New("gateway issuer/service required")
+		fail("gateway issuer/service required")
 	}
-	return nil
+	return errs
 }
 func (c Config) String() string {
 	return fmt.Sprintf("asterisk tenant=%s pbx=%s secrets=[REDACTED]", c.Binding.TenantID, c.Binding.PBXID)

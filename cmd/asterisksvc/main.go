@@ -19,6 +19,9 @@ func main() {
 }
 func run() error {
 	args := os.Args[1:]
+	if len(args) > 0 && args[0] == "preflight" {
+		os.Exit(preflightCmd(args[1:], os.Stdout, os.Stderr))
+	}
 	boot := len(args) > 0 && args[0] == "bootstrap"
 	if boot {
 		args = args[1:]
