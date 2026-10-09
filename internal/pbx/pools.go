@@ -64,7 +64,10 @@ func Open(ctx context.Context, c config.Config) (p *Pools, err error) {
 	}
 	return p, nil
 }
-func OpenDB(ctx context.Context, dsn, tz string) (*sql.DB, error) {
+
+// DSNConfig is the driver configuration OpenDB connects with (preflight
+// probes with the same).
+func DSNConfig(dsn, tz string) (*mysql.Config, error) {
 	c, e := mysql.ParseDSN(dsn)
 	if e != nil {
 		return nil, errors.New("invalid database configuration")
@@ -75,6 +78,14 @@ func OpenDB(ctx context.Context, dsn, tz string) (*sql.DB, error) {
 	c.ReadTimeout = 5 * time.Second
 	c.WriteTimeout = 5 * time.Second
 	c.MultiStatements = false
+	return c, nil
+}
+
+func OpenDB(ctx context.Context, dsn, tz string) (*sql.DB, error) {
+	c, e := DSNConfig(dsn, tz)
+	if e != nil {
+		return nil, e
+	}
 	db, e := sql.Open("mysql", c.FormatDSN())
 	if e != nil {
 		return nil, errors.New("database open failed")

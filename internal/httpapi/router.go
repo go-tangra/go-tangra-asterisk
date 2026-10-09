@@ -16,6 +16,7 @@ import (
 	"github.com/go-tangra/go-tangra-asterisk/v4/pkg/asteriskmanifest"
 	"github.com/go-tangra/go-tangra-auth/sdk/v4/pkg/authclient"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -58,16 +59,19 @@ type Deps struct {
 	RegistrationFresh func() bool
 	Remote            fs.FS
 	Stop              <-chan struct{}
+	// Log receives why operator requests are refused (nil: not logged).
+	Log *slog.Logger
 }
 type Server struct {
 	Deps      Deps
+	refusals  *refusals
 	mux       *http.ServeMux
 	patterns  map[string]bool
 	validator routers.Router
 }
 
 func New(d Deps) (*Server, error) {
-	s := &Server{Deps: d, mux: http.NewServeMux(), patterns: map[string]bool{}}
+	s := &Server{Deps: d, mux: http.NewServeMux(), patterns: map[string]bool{}, refusals: &refusals{log: d.Log}}
 	if s.Deps.StreamLifetime <= 0 || s.Deps.StreamLifetime > 300*time.Second {
 		s.Deps.StreamLifetime = 240 * time.Second
 	}

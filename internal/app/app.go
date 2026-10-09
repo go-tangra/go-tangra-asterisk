@@ -152,7 +152,7 @@ func Build(ctx context.Context, c config.Config, o Options) (a *App, err error) 
 		}
 	}
 	remote, _ := ui.Remote()
-	a.HTTP, err = httpapi.New(httpapi.Deps{Tenant: c.Binding.TenantID, Timezone: location.String(), Verifier: a.Verifier, Checker: a.Checker, History: repo, Reports: reports, Registry: a.Registry, Registration: a.registration.Load, Recordings: a.recordings.Load, Dashboard: metrics, AMIEnabled: c.AMI.Enabled, StreamLifetime: time.Duration(c.StreamSeconds) * time.Second, Ready: a.ready, Remote: remote, Stop: a.streamStop, RegistrationFresh: func() bool { return a.Listener != nil && a.Listener.RegistrationFresh.Load() }, Capabilities: func(ctx context.Context) map[string]httpapi.Capability {
+	a.HTTP, err = httpapi.New(httpapi.Deps{Log: a.Log, Tenant: c.Binding.TenantID, Timezone: location.String(), Verifier: a.Verifier, Checker: a.Checker, History: repo, Reports: reports, Registry: a.Registry, Registration: a.registration.Load, Recordings: a.recordings.Load, Dashboard: metrics, AMIEnabled: c.AMI.Enabled, StreamLifetime: time.Duration(c.StreamSeconds) * time.Second, Ready: a.ready, Remote: remote, Stop: a.streamStop, RegistrationFresh: func() bool { return a.Listener != nil && a.Listener.RegistrationFresh.Load() }, Capabilities: func(ctx context.Context) map[string]httpapi.Capability {
 		ready := a.ready(ctx) == nil
 		return map[string]httpapi.Capability{"history": {Available: ready, Fresh: ready}, "cel": {Available: a.Pools.CEL, Fresh: ready}, "quality": {Available: a.Pools.Columns["rtpqos"] || a.Pools.Columns["peerrtpqos"], Fresh: ready}, "names": {Available: a.Pools.Names, Fresh: ready}}
 	}})
