@@ -1,0 +1,38 @@
+# How asterisk describes itself to the gateway's module catalogue (spec 035).
+# Each v* release publishes catalogue-entry.json and bundle.zip built from
+# this file and deploy/bundle/ (see .github/workflows/ci.yaml, job catalogue).
+schema: 1
+module: asterisk
+display_name: Asterisk
+category: Communications
+summary: Read-only observation of an Asterisk PBX - live calls, call history, recordings and registrations.
+image: ghcr.io/go-tangra/go-tangra-asterisk
+routes:
+  prefixes: [/api/asterisk, /m/asterisk, /asterisk]
+  names: [asterisk]
+min_core: { gateway: 4.9.0, auth: 4.10.0 }
+bundle:
+  dir: deploy/bundle
+  templates: [config.yaml, policy.yaml]
+host_inputs:
+  - key: MODULE_ADVERTISE_HOST
+    label: Host name the core uses to reach this module
+    pattern: '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$'
+  - key: MODULE_BIND_IP
+    label: IP address the module's mesh ports listen on (reachable from the core)
+    pattern: '^((25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]?[0-9])$'
+  - key: ASTERISK_TENANT_ID
+    label: Tenant this PBX belongs to (UUID)
+    pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+  - key: ASTERISK_PBX_ID
+    label: Name of this PBX within the tenant
+    pattern: '^[a-z0-9][a-z0-9-]{0,62}$'
+    default: pbx-1
+  - key: ASTERISK_CDR_DSN
+    label: 'CDR database, read-only user (user:password@tcp(host:3306)/asteriskcdrdb)'
+    pattern: '^[A-Za-z0-9_.-]{1,64}:[^@\s''"$`\\]{1,128}@tcp\([A-Za-z0-9.-]{1,253}:[0-9]{1,5}\)/[A-Za-z0-9_]{1,64}$'
+  - key: ASTERISK_RECORDINGS_DIR
+    label: Host directory of the PBX recordings (mounted read-only)
+    pattern: '^/[A-Za-z0-9._/-]{0,254}$'
+    default: /var/spool/asterisk/monitor
+docs: https://github.com/go-tangra/go-tangra-asterisk/tree/v4#readme

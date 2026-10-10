@@ -1,0 +1,34 @@
+# asterisk configuration, rendered by the gateway's add-module wizard: every
+# ${...} below was filled from the core's own configuration or the inputs
+# given in the wizard.
+service_name: asterisk
+trust_domain: ${TRUST_DOMAIN}
+env: production
+identity:
+  provider: provided
+mesh_enroll:
+  enabled: true
+  enroll_url: ${LCM_ENROLL_URL}
+  lcm_grpc: ${LCM_GRPC}
+  tenant_id: ${MESH_TENANT_ID}
+  token_file: /run/secrets/asterisk.token
+  state_file: /var/lib/asterisk-module/svid.json
+authz: { source: file, path: /etc/asterisk-module/policy.yaml }
+server: { http_addr: 0.0.0.0:8444, grpc_addr: 0.0.0.0:9444 }
+admin: { addr: 127.0.0.1:9094 }
+discovery:
+  static:
+    auth: ["${AUTH_GRPC}"]
+    gateway: ["${GATEWAY_GRPC}"]
+binding:
+  tenant_id: ${ASTERISK_TENANT_ID}
+  pbx_id: ${ASTERISK_PBX_ID}
+  cdr_dsn: "${ASTERISK_CDR_DSN}"
+  registration_retention_days: 400
+  recording_root: /recordings
+  timezone: Europe/Sofia
+  source_timezone: Europe/Sofia
+ami: { enabled: false }
+gateway: { service: gateway, issuer: ${GATEWAY_ISSUER} }
+query_timeout_seconds: 5
+stream_seconds: 240
