@@ -1,0 +1,26 @@
+# asterisk join bundle, rendered by the gateway's add-module wizard.
+#   docker compose up -d
+# Values come from .env (written by the gateway: core addresses and the host
+# inputs you gave). private/ holds the single-use enrolment token.
+name: tangra-asterisk
+services:
+  asterisk:
+    image: ${MODULE_IMAGE}:${MODULE_VERSION}
+    user: "65532:65532"
+    read_only: true
+    restart: unless-stopped
+    command: ["-config", "/etc/asterisk-module/config.yaml"]
+    environment:
+      FREYA_ADVERTISE_HOST: ${MODULE_ADVERTISE_HOST}
+    ports:
+      - "${MODULE_BIND_IP}:8444:8444"
+      - "${MODULE_BIND_IP}:9444:9444"
+    volumes:
+      - ./config.yaml:/etc/asterisk-module/config.yaml:ro
+      - ./policy.yaml:/etc/asterisk-module/policy.yaml:ro
+      - ./private/enrollment.token:/run/secrets/asterisk.token:ro
+      - asterisk-state:/var/lib/asterisk-module
+      - ${ASTERISK_RECORDINGS_DIR}:/recordings:ro
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m"]
+volumes:
+  asterisk-state: {}

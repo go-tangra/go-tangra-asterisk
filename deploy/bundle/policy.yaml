@@ -1,0 +1,9 @@
+# Freya service-to-service policy for asterisk (rendered for this core's
+# trust domain): only the gateway reaches the module.
+version: asterisk-join-1
+rules:
+  - id: portal-browser-and-remote
+    from: ["spiffe://${TRUST_DOMAIN}/svc/gateway"]
+    to: ["asterisk"]
+    operations: ["GET *", "HEAD *"]
+    effect: allow
