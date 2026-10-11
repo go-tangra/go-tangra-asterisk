@@ -128,7 +128,7 @@ func TestJoinBundleConfigRenders(t *testing.T) {
 			"TRUST_DOMAIN": "infra.example", "LCM_ENROLL_URL": "https://portal.example:8443/api/lcm/v1/enroll", "LCM_GRPC": "portal.example:9945",
 			"MESH_TENANT_ID": "00000000-0000-0000-0000-000000000001", "AUTH_GRPC": "portal.example:9543", "GATEWAY_GRPC": "portal.example:9643",
 			"GATEWAY_ISSUER": "https://portal.example:8443", "ASTERISK_TENANT_ID": "00000000-0000-0000-0000-000000000001", "ASTERISK_PBX_ID": "pbx-1",
-			"ASTERISK_CDR_DSN": "ro:pw@tcp(localhost:3306)/asteriskcdrdb",
+			"ASTERISK_CDR_DSN":    "ro:pw@tcp(localhost:3306)/asteriskcdrdb",
 			"ASTERISK_CONFIG_DSN": "", "ASTERISK_REGISTRATION_DSN": "", "ASTERISK_AMI_ADDRESS": "", "ASTERISK_AMI_USERNAME": "", "ASTERISK_AMI_SECRET": "",
 		} {
 			t.Setenv(k, v)
