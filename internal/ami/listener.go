@@ -194,16 +194,17 @@ func (l *Listener) session(ctx context.Context) error {
 		_ = store.RestartGap(ctx)
 	}
 	skipSnapshot := false
-	failedCapture := func() {
+	failedCaptureWith := func(err error) {
 		captureHealthy = false
 		l.RegistrationFresh.Store(false)
 		if store != nil {
 			_ = store.RestartGap(ctx)
 		}
 		if l.OnError != nil {
-			l.OnError(errors.New("AMI registration capture failed"))
+			l.OnError(err)
 		}
 	}
+	failedCapture := func() { failedCaptureWith(errors.New("AMI registration capture failed")) }
 	for ctx.Err() == nil {
 		conn.SetDeadline(time.Now().Add(idleTimeout))
 		m, err = r.Next()
@@ -264,7 +265,17 @@ func (l *Listener) session(ctx context.Context) error {
 			l.OnFrame(m)
 		}
 		l.Registry.Apply(m, gen)
-		switch m["Event"] {
+		event := m["Event"]
+		if m["Response"] == "Error" && m["ActionID"] == "contact-snapshot" {
+			if strings.Contains(m["Message"], "No Contacts found") {
+				// Asterisk answers an empty contact list with an error
+				// instead of an empty list: the snapshot is complete.
+				event = "ContactListComplete"
+			} else {
+				failedCaptureWith(fmt.Errorf("AMI contact snapshot rejected: %s", reason(m)))
+			}
+		}
+		switch event {
 		case "CoreShowChannelsComplete":
 			liveReady = true
 			l.Registry.Status(true)
