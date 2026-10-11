@@ -1,0 +1,35 @@
+[Unit]
+Description=go-tangra asterisk module
+Documentation=https://github.com/go-tangra/go-tangra-asterisk/tree/v4#readme
+Wants=network-online.target
+After=network-online.target
+# Configured by the join bundle's install-standalone.sh.
+ConditionPathExists=/etc/tangra-asterisk/config.yaml
+
+[Service]
+User=tangra-asterisk
+Group=tangra-asterisk
+WorkingDirectory=/etc/tangra-asterisk
+# Optional overrides (not written by install-standalone.sh).
+EnvironmentFile=-/etc/tangra-asterisk/environment
+ExecStart=/usr/bin/asterisksvc -config /etc/tangra-asterisk/config.yaml
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+# lcm enrolment state (mesh_enroll.state_file).
+StateDirectory=tangra-asterisk
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -36,6 +36,6 @@ Viewer permissions exclude recordings. Investigators have all six module permiss
 
 ## Deployment and acceptance
 
-`Dockerfile` builds as non-root and uses a BuildKit `npm_token` secret. `deploy/compose.yaml` joins an existing mesh network and publishes no host ports. `deploy/tangra-asterisk.service` is the systemd alternative. Adjust paths, domain, discovery targets and environment files for your installation; keep PBX/dialplan changes manual.
+`Dockerfile` builds as non-root and uses a BuildKit `npm_token` secret. `deploy/compose.yaml` joins an existing mesh network and publishes no host ports. Without containers, each release's `tangra-asterisk` .deb/.rpm (`packaging/`, `make packages`) runs it as a systemd service; the join bundle's `install-standalone.sh` installs it with the configuration the gateway generated. `deploy/tangra-asterisk.service` is a hand-configured systemd example. Adjust paths, domain, discovery targets and environment files for your installation; keep PBX/dialplan changes manual.
 
 Use `deploy/fixtures.yaml` for a disposable MySQL 8.4 fixture. See [docs/validation.md](docs/validation.md) for commands, measured checks and release blockers. Full portal/MySQL/performance acceptance is required before release; a passing unit suite does not establish these deployment results.

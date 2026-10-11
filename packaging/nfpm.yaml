@@ -1,0 +1,40 @@
+# nfpm package definition for the standalone (non-container) asterisk module
+# (.deb and .rpm). Built by `make packages` and CI: VERSION (without "v") and
+# ARCH (amd64 | arm64) come from the environment; the binary for ARCH is
+# staged at bin/pkg/asterisksvc (nfpm expands no variables in src paths).
+# The package ships no configuration: the join bundle's install-standalone.sh
+# writes /etc/tangra-asterisk from the configuration the gateway generated.
+name: tangra-asterisk
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+version_schema: semver
+section: net
+priority: optional
+maintainer: go-tangra <noreply@github.com>
+description: |
+  go-tangra asterisk module: read-only observation of an Asterisk PBX (live
+  calls, call history, recordings and registrations) for the go-tangra portal.
+vendor: go-tangra
+homepage: https://github.com/go-tangra/go-tangra-asterisk
+license: Proprietary
+depends:
+  - tzdata
+contents:
+  - src: ./bin/pkg/asterisksvc
+    dst: /usr/bin/asterisksvc
+    file_info:
+      mode: 0755
+  - src: ./packaging/tangra-asterisk.service
+    dst: /usr/lib/systemd/system/tangra-asterisk.service
+    file_info:
+      mode: 0644
+  - dst: /etc/tangra-asterisk
+    type: dir
+    file_info:
+      mode: 0750
+scripts:
+  preinstall: ./packaging/scripts/preinstall.sh
+  postinstall: ./packaging/scripts/postinstall.sh
+  preremove: ./packaging/scripts/preremove.sh
+  postremove: ./packaging/scripts/postremove.sh
