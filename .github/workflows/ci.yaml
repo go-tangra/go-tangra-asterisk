@@ -83,6 +83,80 @@ jobs:
       - name: Unit tests (vitest)
         run: npm run test:unit
 
+  # Standalone .deb and .rpm (packaging/nfpm.yaml) for linux amd64 and arm64:
+  # the join bundle's install-standalone.sh installs them instead of the
+  # container. Tags build their version; other builds `git describe`. The
+  # amd64 .deb is installed and purged on the runner as a smoke test.
+  packages:
+    name: Standalone packages
+    runs-on: ubuntu-latest
+    needs:
+      - go
+      - ui
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # git describe needs the tags
+
+      - name: shellcheck
+        run: shellcheck deploy/bundle/install-standalone.sh packaging/scripts/*.sh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@go-tangra'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: npm ci
+        run: npm --prefix ui ci --no-audit --no-fund
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+
+      - name: Version
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then v="${GITHUB_REF_NAME#v}"; else v="$(git describe --tags --match 'v*' --always | sed 's/^v//')"; fi
+          echo "PKG_VERSION=${v}" >> "${GITHUB_ENV}"
+
+      - name: Build the packages
+        run: make packages VERSION="${PKG_VERSION}"
+
+      - name: Inspect packages
+        run: |
+          sudo apt-get install -y --no-install-recommends rpm >/dev/null
+          ls -l dist
+          for f in dist/*.deb; do dpkg-deb --info "$f" | sed -n '/Package:/,/Depends:/p'; dpkg-deb -c "$f"; done
+          for f in dist/*.rpm; do rpm -qpi "$f" | grep -E '^(Name|Version|Architecture)'; rpm -qpl "$f"; done
+
+      - name: Install smoke test (amd64 .deb)
+        run: |
+          sudo apt-get install -y ./dist/*_amd64.deb
+          test -x /usr/bin/asterisksvc
+          getent passwd tangra-asterisk
+          test "$(sudo stat -c '%a %U:%G' /etc/tangra-asterisk)" = "750 root:tangra-asterisk"
+          systemctl cat tangra-asterisk.service >/dev/null
+          # Not enabled or started: no configuration yet.
+          if systemctl is-active --quiet tangra-asterisk.service; then echo "started without a configuration" >&2; exit 1; fi
+          sudo apt-get purge -y tangra-asterisk
+          test ! -e /usr/bin/asterisksvc
+          test ! -e /etc/tangra-asterisk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: dist/*
+          if-no-files-found: error
+
   docker:
     name: Docker image
     runs-on: ubuntu-latest
@@ -135,9 +209,11 @@ jobs:
   # catalogue-entry.json and bundle.zip (tangra-module.yaml, deploy/bundle/)
   # with a GitHub artifact attestation, so gateways can list and install this
   # release. Runs after the image is pushed: the action checks it is pullable.
+  # The standalone packages' checksums go into the bundle (packages.sha256,
+  # read by install-standalone.sh) and the packages onto the release.
   catalogue:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [docker]
+    needs: [docker, packages]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -148,7 +224,17 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: dist
+      - name: Pin the package checksums in the bundle
+        run: cp dist/SHA256SUMS deploy/bundle/packages.sha256 && cat deploy/bundle/packages.sha256
       - uses: go-tangra/go-tangra/.github/actions/catalogue-entry@v4.7.0
         with:
           tool-version: v4.7.0
           permissions-command: go run ./cmd/asterisk-catalogue-permissions
+      - name: Attach the packages to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" --clobber dist/*
