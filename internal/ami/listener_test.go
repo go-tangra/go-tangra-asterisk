@@ -240,3 +240,78 @@ func TestLoginRejectedReportsReason(t *testing.T) {
 		t.Fatal("no error reported")
 	}
 }
+
+// Asterisk answers PJSIPShowContacts with "No Contacts found" when nothing is
+// registered: an empty, complete snapshot, not a failure. Any other error is
+// reported with Asterisk's message instead of leaving capture stale silently.
+func TestContactSnapshotErrors(t *testing.T) {
+	for name, tc := range map[string]struct {
+		message string
+		wantErr string
+	}{
+		"no contacts": {"No Contacts found", ""},
+		"refused":     {"Permission denied", "AMI contact snapshot rejected: Permission denied"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			lis, e := net.Listen("tcp", "127.0.0.1:0")
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer lis.Close()
+			served := make(chan struct{})
+			go func() {
+				conn, e := lis.Accept()
+				if e != nil {
+					return
+				}
+				defer conn.Close()
+				r := bufio.NewReader(conn)
+				fmt.Fprint(conn, "Asterisk Call Manager/11.0.0\r\n")
+				for {
+					m, e := ReadFrame(r)
+					if e != nil {
+						return
+					}
+					switch m["Action"] {
+					case "Login":
+						fmt.Fprint(conn, "Response: Success\r\nActionID: login\r\nMessage: Authentication accepted\r\n\r\n")
+					case "CoreShowChannels":
+						fmt.Fprint(conn, "Response: Success\r\nActionID: live-snapshot\r\n\r\nEvent: CoreShowChannelsComplete\r\nActionID: live-snapshot\r\n\r\n")
+					case "PJSIPShowContacts":
+						fmt.Fprintf(conn, "Response: Error\r\nActionID: contact-snapshot\r\nMessage: %s\r\n\r\n", tc.message)
+						close(served)
+						<-time.After(300 * time.Millisecond)
+						return
+					}
+				}
+			}()
+			errs := make(chan error, 8)
+			registry := calls.New()
+			l := Listener{Config: config.AMI{Address: lis.Addr().String(), Username: "observer", Secret: "secret"}, Registry: registry,
+				OnError: func(err error) { errs <- err }}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go l.Run(ctx)
+			select {
+			case <-served:
+			case <-time.After(2 * time.Second):
+				t.Fatal("no contact snapshot requested")
+			}
+			time.Sleep(100 * time.Millisecond)
+			var got error
+			select {
+			case got = <-errs:
+			default:
+			}
+			if tc.wantErr == "" && got != nil {
+				t.Fatalf("an empty contact list was reported as a failure: %v", got)
+			}
+			if tc.wantErr != "" && (got == nil || got.Error() != tc.wantErr) {
+				t.Fatalf("error = %v, want %q", got, tc.wantErr)
+			}
+			if !registry.Snapshot().Fresh {
+				t.Fatal("live state lost over a contact snapshot error")
+			}
+		})
+	}
+}
