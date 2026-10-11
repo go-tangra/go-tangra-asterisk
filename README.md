@@ -30,7 +30,20 @@ Registration uses a **separate module-owned** MySQL database. Only changes are s
 ./bin/asterisksvc -config configs/dev.yaml
 ```
 
-AMI is independently optional: set `ami.enabled`, address, username and secret in a private configuration file or use `${VARIABLE}` expansion. Use an AMI account whose read privileges cover call/contact events and `CoreShowChannels`/`PJSIPShowContacts` plus the optional read-only `CoreSettings`, `CoreStatus`, `PJSIPShowEndpoints`, `SIPpeers` and `QueueStatus` metrics actions; grant no dialing, hangup or configuration privileges. TLS is supported with normal certificate verification. Live monitoring works without registration storage. History works without AMI. Reconciliation records current contacts and identifies unobserved intervals; it never reconstructs lost events.
+AMI is independently optional: set `ami.enabled`, address, username and secret in a private configuration file or use `${VARIABLE}` expansion. Use an AMI account whose read privileges cover call/contact events and `CoreShowChannels`/`PJSIPShowContacts` plus the optional read-only `CoreSettings`, `CoreStatus`, `PJSIPShowEndpoints`, `SIPpeers` and `QueueStatus` metrics actions; grant no dialing, hangup or configuration privileges. TLS is supported with normal certificate verification. Live monitoring works without registration storage. History works without AMI.
+
+A matching AMI account (`/etc/asterisk/manager_custom.conf` on FreePBX, then `asterisk -rx "manager reload"`):
+
+```ini
+[tangra]
+secret = <strong secret>
+deny = 0.0.0.0/0.0.0.0
+permit = 127.0.0.1/255.255.255.255   ; the module's host
+read = system,call,reporting          ; contact, channel and queue events
+write = reporting                     ; CoreShowChannels, PJSIP*/SIPpeers, Core*/QueueStatus — no originate, hangup or command
+```
+
+The module logs in with bare credentials and then sends `Events` (some Asterisk builds drop a `Login` that carries `Events`); a refused login is logged with AMI's reason (`AMI login rejected: Authentication failed`). For refresh registrations to be recorded, set `send_contact_status_on_update_registration = yes` in `pjsip.conf` `[global]`. Reconciliation records current contacts and identifies unobserved intervals; it never reconstructs lost events.
 
 Viewer permissions exclude recordings. Investigators have all six module permissions. Owner/admin grants are investigator; operator/member/auditor grants are viewer. Authorization remains server-side for snapshots, ranges, streams and monitoring. Recording routes require both `calls:read` and `recordings:read`.
 
