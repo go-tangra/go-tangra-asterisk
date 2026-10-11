@@ -145,7 +145,7 @@ var validationFixes = []struct{ match, fix string }{
 	{"module-owned and separate", "point binding.registration_dsn at a database of the module, not the PBX's CDR or config database"},
 	{"invalid timezone", "use an IANA zone such as Europe/Sofia"},
 	{"request_timeout must cover", "raise limits.request_timeout to at least stream_seconds"},
-	{"AMI credentials/address", "set ami.address host:port, ami.username and ami.secret, or ami.enabled: false"},
+	{"AMI credentials/address", "set ami.address host:port, ami.username and ami.secret, or leave ami.address empty (or ami.enabled: false)"},
 	{"recording_root must be absolute", "use an absolute path for binding.recording_root"},
 	{"dedicated monitoring upstream", "binding.monitoring_url must be an http(s) URL without credentials, query or fragment, with monitoring_dedicated: true"},
 	{"gateway issuer/service", "set gateway.issuer to the portal's public origin (auth's issuer setting) and gateway.service"},
@@ -289,7 +289,7 @@ func reachChecks(cfg config.Config, enrolled bool) []preflight.Check {
 			checks = append(checks, preflight.TCPDial("reach: "+n, addr, preflight.DialTimeout))
 		}
 	}
-	if cfg.AMI.Enabled && cfg.AMI.Address != "" {
+	if cfg.AMI.On() && cfg.AMI.Address != "" {
 		checks = append(checks, preflight.TCPDial("reach: ami (ami.address)", cfg.AMI.Address, preflight.DialTimeout))
 	}
 	if u, err := url.Parse(cfg.Binding.MonitoringURL); cfg.Binding.MonitoringURL != "" && err == nil && u.Host != "" {

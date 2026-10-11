@@ -60,8 +60,19 @@ type AMI struct {
 	Username string `yaml:"username" json:"-"`
 	Secret   string `yaml:"secret" json:"-"`
 	TLS      bool   `yaml:"tls"`
-	Enabled  bool   `yaml:"enabled"`
+	// Enabled turns AMI observation on or off. Left out, it follows Address:
+	// the join bundle renders an empty address when the host has no AMI.
+	Enabled *bool `yaml:"enabled"`
 }
+
+// On reports whether AMI observation is configured.
+func (a AMI) On() bool {
+	if a.Enabled != nil {
+		return *a.Enabled
+	}
+	return a.Address != ""
+}
+
 type Gateway struct {
 	Service string `yaml:"service"`
 	Issuer  string `yaml:"issuer"`
@@ -172,7 +183,7 @@ func (c Config) ValidateAll() []error {
 	if c.QueryTimeoutSeconds < 1 || c.QueryTimeoutSeconds > 30 || c.StreamSeconds < 1 || c.StreamSeconds > 300 {
 		fail("invalid query/stream bounds")
 	}
-	if c.AMI.Enabled {
+	if c.AMI.On() {
 		if _, _, e := net.SplitHostPort(c.AMI.Address); e != nil || c.AMI.Username == "" || c.AMI.Secret == "" {
 			fail("AMI credentials/address required")
 		}

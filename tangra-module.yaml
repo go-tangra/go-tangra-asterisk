@@ -10,7 +10,8 @@ image: ghcr.io/go-tangra/go-tangra-asterisk
 routes:
   prefixes: [/api/asterisk, /m/asterisk, /asterisk]
   names: [asterisk]
-min_core: { gateway: 4.9.0, auth: 4.10.0 }
+# gateway 4.12.0: optional host inputs (framework 4.9.0).
+min_core: { gateway: 4.12.0, auth: 4.10.0 }
 bundle:
   dir: deploy/bundle
   templates: [config.yaml, policy.yaml]
@@ -35,4 +36,25 @@ host_inputs:
     label: Host directory of the PBX recordings (mounted read-only)
     pattern: '^/[A-Za-z0-9._/-]{0,254}$'
     default: /var/spool/asterisk/monitor
+  # Optional data sources: left empty, the feature stays off.
+  - key: ASTERISK_CONFIG_DSN
+    label: 'Extension names: FreePBX config database, read-only user (user:password@tcp(host:3306)/asterisk)'
+    pattern: '^[A-Za-z0-9_.-]{1,64}:[^@\s''"$`\\]{1,128}@tcp\([A-Za-z0-9.-]{1,253}:[0-9]{1,5}\)/[A-Za-z0-9_]{1,64}$'
+    optional: true
+  - key: ASTERISK_REGISTRATION_DSN
+    label: 'Registration history: database the module owns (user:password@tcp(host:3306)/tangra_asterisk)'
+    pattern: '^[A-Za-z0-9_.-]{1,64}:[^@\s''"$`\\]{1,128}@tcp\([A-Za-z0-9.-]{1,253}:[0-9]{1,5}\)/[A-Za-z0-9_]{1,64}$'
+    optional: true
+  - key: ASTERISK_AMI_ADDRESS
+    label: 'Live calls and registrations: AMI address (usually 127.0.0.1:5038)'
+    pattern: '^[A-Za-z0-9.-]{1,253}:[0-9]{1,5}$'
+    optional: true
+  - key: ASTERISK_AMI_USERNAME
+    label: AMI user (read-only, see the README)
+    pattern: '^[A-Za-z0-9_.-]{1,64}$'
+    optional: true
+  - key: ASTERISK_AMI_SECRET
+    label: AMI secret
+    pattern: '^[^\s''"$`\\]{1,128}$'
+    optional: true
 docs: https://github.com/go-tangra/go-tangra-asterisk/tree/v4#readme

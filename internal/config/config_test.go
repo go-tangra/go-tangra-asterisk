@@ -79,3 +79,82 @@ func TestDevConfigLoads(t *testing.T) {
 		t.Fatalf("mesh_enroll = %+v, provider %q", c.MeshEnroll, c.Identity.Provider)
 	}
 }
+
+// Without an explicit enabled, AMI follows its address: the join bundle
+// renders an empty address for a host without AMI. An address needs the
+// credentials; an explicit enabled: false wins.
+func TestAMIFollowsAddress(t *testing.T) {
+	base := func() Config {
+		c := Default()
+		c.Gateway.Issuer = "https://auth.example.org"
+		c.TrustDomain = "test.local"
+		c.Authz.Path = "policy"
+		c.Binding.TenantID = "t"
+		c.Binding.PBXID = "p"
+		c.Binding.CDRDSN = "reader:x@tcp(mysql:3306)/cdr"
+		return c
+	}
+	c := base()
+	if c.AMI.On() || c.Validate() != nil {
+		t.Fatal("no address: AMI must be off and valid")
+	}
+	c.AMI = AMI{Address: "127.0.0.1:5038", Username: "tangra", Secret: "s"}
+	if !c.AMI.On() || c.Validate() != nil {
+		t.Fatal("address with credentials: AMI on and valid")
+	}
+	c.AMI.Secret = ""
+	if c.Validate() == nil {
+		t.Fatal("address without a secret accepted")
+	}
+	off := false
+	c.AMI = AMI{Address: "127.0.0.1:5038", Enabled: &off}
+	if c.AMI.On() || c.Validate() != nil {
+		t.Fatal("enabled: false must win over the address")
+	}
+	on := true
+	c.AMI = AMI{Enabled: &on}
+	if c.Validate() == nil {
+		t.Fatal("enabled: true without an address accepted")
+	}
+}
+
+// The join bundle's config.yaml, rendered as the gateway does (every input
+// set, optional ones possibly empty), loads and validates: empty optional
+// sources leave their features off, given ones turn them on.
+func TestJoinBundleConfigRenders(t *testing.T) {
+	render := func(t *testing.T, optional map[string]string) Config {
+		t.Helper()
+		for k, v := range map[string]string{
+			"TRUST_DOMAIN": "infra.example", "LCM_ENROLL_URL": "https://portal.example:8443/api/lcm/v1/enroll", "LCM_GRPC": "portal.example:9945",
+			"MESH_TENANT_ID": "00000000-0000-0000-0000-000000000001", "AUTH_GRPC": "portal.example:9543", "GATEWAY_GRPC": "portal.example:9643",
+			"GATEWAY_ISSUER": "https://portal.example:8443", "ASTERISK_TENANT_ID": "00000000-0000-0000-0000-000000000001", "ASTERISK_PBX_ID": "pbx-1",
+			"ASTERISK_CDR_DSN": "ro:pw@tcp(localhost:3306)/asteriskcdrdb",
+			"ASTERISK_CONFIG_DSN": "", "ASTERISK_REGISTRATION_DSN": "", "ASTERISK_AMI_ADDRESS": "", "ASTERISK_AMI_USERNAME": "", "ASTERISK_AMI_SECRET": "",
+		} {
+			t.Setenv(k, v)
+		}
+		for k, v := range optional {
+			t.Setenv(k, v)
+		}
+		c, e := Load("../../deploy/bundle/config.yaml")
+		if e != nil {
+			t.Fatal(e)
+		}
+		return c
+	}
+	t.Run("optional sources empty", func(t *testing.T) {
+		c := render(t, nil)
+		if c.AMI.On() || c.Binding.ConfigDSN != "" || c.Binding.RegistrationDSN != "" {
+			t.Fatalf("%+v %+v", c.AMI, c.Binding)
+		}
+	})
+	t.Run("optional sources given", func(t *testing.T) {
+		c := render(t, map[string]string{
+			"ASTERISK_CONFIG_DSN": "ro:pw@tcp(localhost:3306)/asterisk", "ASTERISK_REGISTRATION_DSN": "rw:pw@tcp(localhost:3306)/tangra_asterisk",
+			"ASTERISK_AMI_ADDRESS": "127.0.0.1:5038", "ASTERISK_AMI_USERNAME": "tangra", "ASTERISK_AMI_SECRET": "s3cret",
+		})
+		if !c.AMI.On() || c.AMI.Username != "tangra" || c.Binding.ConfigDSN == "" || c.Binding.RegistrationDSN == "" {
+			t.Fatalf("%+v %+v", c.AMI, c.Binding)
+		}
+	})
+}
