@@ -40,6 +40,9 @@ func TestJoinBundleRendersToValidProductionConfig(t *testing.T) {
 		"GATEWAY_GRPC": "portal.example.org:9643", "AUTH_GRPC": "portal.example.org:9543", "MESH_TENANT_ID": "00000000-0000-0000-0000-000000000001",
 		"ASTERISK_TENANT_ID": "0b2f6a1e-4c55-4c8e-9d1a-000000000a0a", "ASTERISK_PBX_ID": "pbx-1",
 		"ASTERISK_CDR_DSN": "cdr:S3cret-pw@tcp(pbx.example.org:3306)/asteriskcdrdb",
+		// Optional inputs left empty render as "" (gateway 4.12.0).
+		"ASTERISK_CONFIG_DSN": "", "ASTERISK_REGISTRATION_DSN": "",
+		"ASTERISK_AMI_ADDRESS": "", "ASTERISK_AMI_USERNAME": "", "ASTERISK_AMI_SECRET": "",
 	}
 	dir := t.TempDir()
 	for _, name := range []string{"config.yaml", "policy.yaml"} {
@@ -69,6 +72,9 @@ func TestJoinBundleRendersToValidProductionConfig(t *testing.T) {
 	}
 	if !cfg.IsProduction() || cfg.Gateway.Issuer != "https://portal.example.org:8443" || cfg.Binding.TenantID != values["ASTERISK_TENANT_ID"] {
 		t.Fatalf("%+v %+v", cfg.Gateway, cfg.Binding.TenantID)
+	}
+	if cfg.AMI.On() || cfg.Binding.ConfigDSN != "" || cfg.Binding.RegistrationDSN != "" {
+		t.Fatalf("empty optional sources must stay off: %+v %+v", cfg.AMI, cfg.Binding)
 	}
 	pol, _ := os.ReadFile(filepath.Join(dir, "policy.yaml"))
 	if !strings.Contains(string(pol), "spiffe://infra.example.org/svc/gateway") {
