@@ -7,6 +7,7 @@ import (
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/calls"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/config"
 	"net"
+	"strings"
 	"testing"
 	"time"
 )
@@ -18,6 +19,7 @@ func TestFakeServerReconciliationAndCancellation(t *testing.T) {
 	}
 	defer lis.Close()
 	serverDone := make(chan struct{})
+	loginErr := make(chan error, 1)
 	go func() {
 		defer close(serverDone)
 		conn, e := lis.Accept()
@@ -27,10 +29,18 @@ func TestFakeServerReconciliationAndCancellation(t *testing.T) {
 		defer conn.Close()
 		r := bufio.NewReader(conn)
 		m, e := ReadFrame(r)
-		if e != nil || m["Action"] != "Login" {
+		// Login carries no Events (some Asterisk builds drop such a
+		// socket unanswered); events are switched on by a separate action.
+		if e != nil || m["Action"] != "Login" || m["Events"] != "" || m["ActionID"] != "login" {
+			loginErr <- fmt.Errorf("login frame %v (%v)", m, e)
 			return
 		}
-		fmt.Fprint(conn, "Asterisk Call Manager/5.0\r\nResponse: Success\r\n\r\n")
+		fmt.Fprint(conn, "Asterisk Call Manager/5.0\r\nResponse: Success\r\nActionID: login\r\n\r\n")
+		if m, e = ReadFrame(r); e != nil || m["Action"] != "Events" || m["EventMask"] != "on" {
+			loginErr <- fmt.Errorf("events frame %v (%v)", m, e)
+			return
+		}
+		loginErr <- nil
 		ReadFrame(r)
 		ReadFrame(r)
 		fmt.Fprint(conn, "Event: CoreShowChannel\r\nUniqueid: a\r\nLinkedid: call\r\nChannel: PJSIP/01-1\r\n\r\nEvent: CoreShowChannelsComplete\r\n\r\nEvent: ContactListComplete\r\n\r\n")
@@ -44,6 +54,14 @@ func TestFakeServerReconciliationAndCancellation(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	for !registry.Snapshot().Fresh && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
+	}
+	select {
+	case e := <-loginErr:
+		if e != nil {
+			cancel()
+			t.Fatal(e)
+		}
+	default:
 	}
 	if snapshot := registry.Snapshot(); !snapshot.Fresh || len(snapshot.Calls) != 1 {
 		cancel()
@@ -181,5 +199,44 @@ func TestFrameSplitAcrossTimeoutIsKept(t *testing.T) {
 	}
 	if n := len(logins); n != 1 {
 		t.Fatalf("logins = %d; the paused frame dropped the session", n)
+	}
+}
+
+// A refused login reaches OnError with AMI's reason (so the log says why),
+// never with the secret.
+func TestLoginRejectedReportsReason(t *testing.T) {
+	lis, e := net.Listen("tcp", "127.0.0.1:0")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer lis.Close()
+	go func() {
+		conn, e := lis.Accept()
+		if e != nil {
+			return
+		}
+		defer conn.Close()
+		fmt.Fprint(conn, "Asterisk Call Manager/5.0\r\n")
+		if _, e := ReadFrame(bufio.NewReader(conn)); e != nil {
+			return
+		}
+		fmt.Fprint(conn, "Response: Error\r\nActionID: login\r\nMessage: Authentication failed\r\n\r\n")
+	}()
+	errs := make(chan error, 4)
+	l := Listener{Config: config.AMI{Address: lis.Addr().String(), Username: "observer", Secret: "s3cret-value"}, Registry: calls.New(),
+		OnError: func(err error) { errs <- err }}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go l.Run(ctx)
+	select {
+	case err := <-errs:
+		if err == nil || !strings.Contains(err.Error(), "AMI login rejected: Authentication failed") {
+			t.Fatalf("error = %v", err)
+		}
+		if strings.Contains(err.Error(), "s3cret-value") {
+			t.Fatal("error carries the secret")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no error reported")
 	}
 }

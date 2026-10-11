@@ -167,7 +167,7 @@ func Build(ctx context.Context, c config.Config, o Options) (a *App, err error) 
 		return nil, err
 	}
 	if c.AMI.Enabled {
-		a.Listener = &ami.Listener{Config: c.AMI, Registry: a.Registry, OnError: func() { a.Log.Warn("AMI observation interrupted; retrying") }, OnContact: collector.Contact, OnFrame: collector.Frame, OnSweep: collector.BeginSweep}
+		a.Listener = &ami.Listener{Config: c.AMI, Registry: a.Registry, OnError: func(err error) { a.Log.Warn("AMI observation interrupted; retrying", "error", err) }, OnContact: collector.Contact, OnFrame: collector.Frame, OnSweep: collector.BeginSweep}
 		a.Listener.Store.Store(a.registration.Load())
 	}
 	if err = a.buildAdmin(); err != nil {

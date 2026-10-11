@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/calls"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/config"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/registration"
@@ -20,8 +21,10 @@ type Listener struct {
 	Registry *calls.Registry
 	// Store is the registration repository; it may appear while running
 	// (opened late), and capture starts from the next contact snapshot.
-	Store             atomic.Pointer[registration.Repository]
-	OnError           func()
+	Store atomic.Pointer[registration.Repository]
+	// OnError reports why a session ended or capture failed; the error never
+	// carries the AMI secret.
+	OnError           func(error)
 	OnContact         func(registration.Event)
 	OnFrame           func(map[string]string)
 	OnSweep           func()
@@ -91,14 +94,14 @@ func (l *Listener) Run(ctx context.Context) {
 	for ctx.Err() == nil {
 		started := time.Now()
 		l.RegistrationFresh.Store(false)
-		_ = l.session(ctx)
+		err := l.session(ctx)
 		l.RegistrationFresh.Store(false)
 		l.Registry.Status(false)
 		if store := l.Store.Load(); store != nil {
 			_ = store.BeginGap(ctx)
 		}
-		if l.OnError != nil {
-			l.OnError()
+		if l.OnError != nil && ctx.Err() == nil {
+			l.OnError(err)
 		}
 		if time.Since(started) > time.Minute {
 			backoff = time.Second
@@ -124,7 +127,7 @@ func (l *Listener) session(ctx context.Context) error {
 		conn, err = d.DialContext(ctx, "tcp", l.Config.Address)
 	}
 	if err != nil {
-		return errors.New("AMI unavailable")
+		return fmt.Errorf("AMI unavailable: %w", err)
 	}
 	defer conn.Close()
 	done := make(chan struct{})
@@ -138,12 +141,20 @@ func (l *Listener) session(ctx context.Context) error {
 	}()
 	r := NewFrameReader(bufio.NewReaderSize(conn, 65536))
 	conn.SetDeadline(time.Now().Add(10 * time.Second))
-	if err = WriteAction(conn, "Login", map[string]string{"Username": l.Config.Username, "Secret": l.Config.Secret, "Events": "on"}); err != nil {
-		return err
+	// Bare credentials, then a separate Events action: some Asterisk builds
+	// close the socket without answering a Login that carries Events.
+	if err = WriteAction(conn, "Login", map[string]string{"ActionID": "login", "Username": l.Config.Username, "Secret": l.Config.Secret}); err != nil {
+		return fmt.Errorf("AMI login: %w", err)
 	}
-	m, err := r.Next()
-	if err != nil || m["Response"] != "Success" {
-		return errors.New("AMI login rejected")
+	m, err := awaitResponse(r, "login")
+	if err != nil {
+		return fmt.Errorf("AMI login: %w", err)
+	}
+	if m["Response"] != "Success" {
+		return fmt.Errorf("AMI login rejected: %s", reason(m))
+	}
+	if err = WriteAction(conn, "Events", map[string]string{"ActionID": "events", "EventMask": "on"}); err != nil {
+		return fmt.Errorf("AMI events: %w", err)
 	}
 	l.Registry.Reset(false)
 	gen := l.Registry.Snapshot().Generation
@@ -190,7 +201,7 @@ func (l *Listener) session(ctx context.Context) error {
 			_ = store.RestartGap(ctx)
 		}
 		if l.OnError != nil {
-			l.OnError()
+			l.OnError(errors.New("AMI registration capture failed"))
 		}
 	}
 	for ctx.Err() == nil {
@@ -309,7 +320,7 @@ func (l *Listener) session(ctx context.Context) error {
 			}
 		}
 		if (!liveReady || !contactsReady) && m["Response"] == "Error" && m["ActionID"] == "live-snapshot" {
-			return errors.New("AMI live reconciliation rejected")
+			return fmt.Errorf("AMI live reconciliation rejected: %s", reason(m))
 		}
 	}
 
@@ -346,4 +357,36 @@ func Contact(m map[string]string, now time.Time) registration.Event {
 		e.Expire = time.Unix(exp, 0).UTC()
 	}
 	return e
+}
+
+// awaitResponse reads frames until the response to the action with id (or
+// one without an ActionID), skipping anything else AMI sends first.
+func awaitResponse(r *FrameReader, id string) (map[string]string, error) {
+	for {
+		m, err := r.Next()
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := m["Response"]; ok && (m["ActionID"] == "" || m["ActionID"] == id) {
+			return m, nil
+		}
+	}
+}
+
+// reason is the Message of an AMI error response, bounded and on one line,
+// for logs.
+func reason(m map[string]string) string {
+	msg := strings.Map(func(r rune) rune {
+		if r < ' ' || r == 0x7f {
+			return ' '
+		}
+		return r
+	}, m["Message"])
+	if msg == "" {
+		msg = "no message (Response: " + m["Response"] + ")"
+	}
+	if len(msg) > 200 {
+		msg = msg[:200]
+	}
+	return msg
 }
