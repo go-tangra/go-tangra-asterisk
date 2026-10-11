@@ -230,9 +230,9 @@ jobs:
           path: dist
       - name: Pin the package checksums in the bundle
         run: cp dist/SHA256SUMS deploy/bundle/packages.sha256 && cat deploy/bundle/packages.sha256
-      - uses: go-tangra/go-tangra/.github/actions/catalogue-entry@v4.7.0
+      - uses: go-tangra/go-tangra/.github/actions/catalogue-entry@v4.9.0
         with:
-          tool-version: v4.7.0
+          tool-version: v4.9.0
           permissions-command: go run ./cmd/asterisk-catalogue-permissions
       - name: Attach the packages to the release
         env:

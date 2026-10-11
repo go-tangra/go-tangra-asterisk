@@ -24,11 +24,15 @@ binding:
   tenant_id: ${ASTERISK_TENANT_ID}
   pbx_id: ${ASTERISK_PBX_ID}
   cdr_dsn: "${ASTERISK_CDR_DSN}"
+  # Optional (empty: the feature stays off).
+  config_dsn: "${ASTERISK_CONFIG_DSN}"
+  registration_dsn: "${ASTERISK_REGISTRATION_DSN}"
   registration_retention_days: 400
   recording_root: /recordings
   timezone: Europe/Sofia
   source_timezone: Europe/Sofia
-ami: { enabled: false }
+# AMI is on when an address is given.
+ami: { address: "${ASTERISK_AMI_ADDRESS}", username: "${ASTERISK_AMI_USERNAME}", secret: "${ASTERISK_AMI_SECRET}" }
 gateway: { service: gateway, issuer: ${GATEWAY_ISSUER} }
 query_timeout_seconds: 5
 stream_seconds: 240

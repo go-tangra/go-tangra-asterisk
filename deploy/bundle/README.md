@@ -15,8 +15,16 @@ It downloads this release's `tangra-asterisk` .deb or .rpm from GitHub,
 checks it against `packages.sha256` (pinned in this bundle), installs it,
 writes `/etc/tangra-asterisk` from this directory's configuration (listening
 on `MODULE_BIND_IP` only), runs preflight and starts `tangra-asterisk.service`.
+When a registration database was given, it also creates the module's
+tables there (`--adopt-registration` keeps a v3 history found in it).
 `--help` lists the options. Use one or the other, not both: they share the
 module's identity and ports.
 
 `private/enrollment.token` is the single-use enrolment token; `config.yaml`
 holds the CDR database credentials you gave. Keep both on this host only.
+
+Optional sources (left empty in the wizard, the feature stays off): the
+FreePBX config database (extension names), a module-owned registration
+database (registration history) and an AMI account (live calls and live
+registration state). The AMI account needs `read = system,call,reporting`
+and `write = reporting` (see the module README).

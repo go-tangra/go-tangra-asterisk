@@ -5,12 +5,14 @@
 # /etc/tangra-asterisk from the configuration the gateway generated here
 # (config.yaml, policy.yaml, .env, private/).
 #
-#   sudo bash install-standalone.sh [--package FILE] [--latest] [--no-start]
+#   sudo bash install-standalone.sh [--package FILE] [--latest] [--adopt-registration] [--no-start]
 #
 #   --package FILE  install this .deb/.rpm instead of downloading it (it must
 #                   still match the checksums pinned in this bundle)
 #   --latest        install the latest release instead of this bundle's; it is
 #                   checked against that release's SHA256SUMS only
+#   --adopt-registration  the registration database holds a v3 history
+#                   (pjsip_registration_events): keep and continue it
 #   --no-start      configure everything, but do not enable or start the service
 #
 # Run it again to re-apply the configuration. Remove with `apt purge
@@ -27,13 +29,14 @@ UNIT=tangra-asterisk.service
 die() { echo "install-standalone: $*" >&2; exit 1; }
 note() { echo "install-standalone: $*"; }
 
-package="" latest=0 start=1
+package="" latest=0 start=1 adopt=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --package) [ $# -ge 2 ] || die "--package needs a file"; package="$(realpath "$2")"; shift 2 ;;
     --latest) latest=1; shift ;;
     --no-start) start=0; shift ;;
-    -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --adopt-registration) adopt=1; shift ;;
+    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown argument: $1 (see --help)" ;;
   esac
 done
@@ -134,6 +137,9 @@ sed -e "s#token_file: /run/secrets/asterisk.token#token_file: $ETC/private/enrol
     -e "s#http_addr: 0.0.0.0:8444#http_addr: $bind_ip:8444#" \
     -e "s#grpc_addr: 0.0.0.0:9444#grpc_addr: $bind_ip:9444#" \
     config.yaml > "$work/config.yaml"
+if [ "$adopt" = 1 ] && ! grep -q '^  adopt_registration:' "$work/config.yaml"; then
+  sed -i 's/^\(  registration_dsn: .*\)$/\1\n  adopt_registration: true/' "$work/config.yaml"
+fi
 for want_line in "token_file: $ETC/private/enrollment.token" "state_file: $STATE/svid.json" \
   "path: $ETC/policy.yaml" "recording_root: $recordings" "http_addr: $bind_ip:8444" "grpc_addr: $bind_ip:9444"; do
   grep -qF "$want_line" "$work/config.yaml" || die "config.yaml has an unexpected layout: could not set '$want_line'"
@@ -179,6 +185,18 @@ systemctl daemon-reload
 note "preflight"
 if ! runuser -u "$NAME" -g "$NAME" ${group:+-G "$group"} -- /usr/bin/asterisksvc preflight -config "$ETC/config.yaml"; then
   die "preflight failed: fix the problems above and run this script again"
+fi
+
+# Registration history needs its module-owned tables (idempotent).
+if grep -qE '^  registration_dsn: "[^"]+"' "$ETC/config.yaml"; then
+  note "registration database: bootstrap"
+  if ! out="$(runuser -u "$NAME" -g "$NAME" -- /usr/bin/asterisksvc bootstrap -config "$ETC/config.yaml" 2>&1)"; then
+    echo "$out" >&2
+    case "$out" in
+      *adopt_registration*) die "the registration database holds a v3 history: run again with --adopt-registration to keep it, or give an empty database" ;;
+      *) die "registration bootstrap failed (see above); the rest is configured" ;;
+    esac
+  fi
 fi
 
 if [ "$start" = 1 ]; then
