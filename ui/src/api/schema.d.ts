@@ -324,6 +324,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/asterisk/live/board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["live__board"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -665,6 +681,41 @@ export interface components {
             total: number;
             page: number;
             page_size: number;
+        };
+        LiveAgentCall: {
+            linkedid: string;
+            /** @enum {string} */
+            direction: "inbound" | "outbound" | "internal";
+            peer: string;
+            /** Format: date-time */
+            since: string;
+        };
+        LiveAgent: {
+            extension: string;
+            name: string;
+            member: boolean;
+            /** @enum {string} */
+            state: "offline" | "available" | "ringing" | "on-call" | "on-hold" | "dnd";
+            /** Format: date-time */
+            since: string | null;
+            dnd: boolean;
+            call: components["schemas"]["LiveAgentCall"] | null;
+        };
+        LiveWaiting: {
+            linkedid: string;
+            caller: string;
+            /** @enum {string} */
+            stage: "welcome" | "ringing";
+            /** Format: date-time */
+            since: string;
+            ringing: string[];
+        };
+        LiveBoard: {
+            fresh: boolean;
+            /** Format: date-time */
+            updated: string;
+            agents: components["schemas"]["LiveAgent"][];
+            waiting: components["schemas"]["LiveWaiting"][];
         };
     };
     responses: never;
@@ -2017,6 +2068,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupportLostPage"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    live__board: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveBoard"];
                 };
             };
             /** @description Invalid request */

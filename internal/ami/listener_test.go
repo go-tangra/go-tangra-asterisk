@@ -41,8 +41,9 @@ func TestFakeServerReconciliationAndCancellation(t *testing.T) {
 			return
 		}
 		loginErr <- nil
-		ReadFrame(r)
-		ReadFrame(r)
+		ReadFrame(r) // CoreShowChannels
+		ReadFrame(r) // PJSIPShowContacts
+		ReadFrame(r) // DeviceStateList
 		fmt.Fprint(conn, "Event: CoreShowChannel\r\nUniqueid: a\r\nLinkedid: call\r\nChannel: PJSIP/01-1\r\n\r\nEvent: CoreShowChannelsComplete\r\n\r\nEvent: ContactListComplete\r\n\r\n")
 		ReadFrame(r)
 	}()

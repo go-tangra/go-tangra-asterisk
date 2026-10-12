@@ -20,6 +20,7 @@ All paths below are relative to `/api/asterisk` and require verified tenant bind
 | GET /support/agents | stats:read | from,to (≤92 days); per agent: offered/answered/declined/colleague-answered/rang-while-lost, time to answer, talk, direct, outbound, callbacks; every team member listed |
 | GET /support/lost | stats:read | from,to (≤92 days), page, page_size; lost and announcement-abandoned group calls, newest first, with the extensions that rang and the callback |
 | GET /live/calls | live:read | current calls and freshness |
+| GET /live/board | live:read | per agent (support team plus anyone on a call): offline/available/ringing/on-call/on-hold/dnd, since, current call (direction, peer, since); waiting callers (welcome or ringing, with the phones ringing) |
 | GET /live/calls/stream | live:read | text/event-stream; snapshot, upsert, remove, status; periodic heartbeat comments |
 | GET /recordings/{linkedid} | recordings:read + calls:read | CDR-selected media; full 200, valid range 206, unsatisfiable range 416 |
 | GET /dashboard/query | dashboard:read | query, optional time; normalized instant samples with hasValue |

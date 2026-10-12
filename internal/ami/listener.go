@@ -164,6 +164,13 @@ func (l *Listener) session(ctx context.Context) error {
 	if err = WriteAction(conn, "PJSIPShowContacts", map[string]string{"ActionID": "contact-snapshot"}); err != nil {
 		return err
 	}
+	// Current device states (phones and FreePBX's Custom:DND<ext>) for the
+	// presence board; later changes arrive as DeviceStateChange events. An
+	// account without the privilege answers with an error, which is ignored:
+	// the endpoint sweep then seeds the states.
+	if err = WriteAction(conn, "DeviceStateList", map[string]string{"ActionID": "device-snapshot"}); err != nil {
+		return err
+	}
 
 	sweep := func() error {
 		if l.OnFrame == nil {

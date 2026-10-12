@@ -15,7 +15,9 @@ type Channel struct {
 	Connected string    `json:"connected"`
 	Bridge    string    `json:"bridge"`
 	Created   time.Time `json:"created"`
-	Updated   time.Time `json:"updated"`
+	// Bridged is when the channel first joined a bridge (talk began).
+	Bridged *time.Time `json:"bridged,omitempty"`
+	Updated time.Time  `json:"updated"`
 }
 type Call struct {
 	LinkedID string    `json:"linkedid"`
@@ -165,6 +167,10 @@ func (r *Registry) Apply(m map[string]string, generation uint64) {
 	}
 	if kind == "BridgeLeave" {
 		ch.Bridge = ""
+	}
+	if kind == "BridgeEnter" && ch.Bridged == nil {
+		t := time.Now().UTC()
+		ch.Bridged = &t
 	}
 	ch.Updated = time.Now().UTC()
 	r.updated = ch.Updated

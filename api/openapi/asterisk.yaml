@@ -2023,6 +2023,80 @@
           }
         ]
       }
+    },
+    "/api/asterisk/live/board": {
+      "get": {
+        "operationId": "live__board",
+        "x-freya-permission": "live:read",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveBoard"
+                }
+              }
+            }
+          }
+        },
+        "parameters": []
+      }
     }
   },
   "components": {
@@ -3359,6 +3433,150 @@
           },
           "page_size": {
             "type": "integer"
+          }
+        }
+      },
+      "LiveAgentCall": {
+        "type": "object",
+        "required": [
+          "linkedid",
+          "direction",
+          "peer",
+          "since"
+        ],
+        "properties": {
+          "linkedid": {
+            "type": "string"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "inbound",
+              "outbound",
+              "internal"
+            ]
+          },
+          "peer": {
+            "type": "string"
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "LiveAgent": {
+        "type": "object",
+        "required": [
+          "extension",
+          "name",
+          "member",
+          "state",
+          "since",
+          "dnd",
+          "call"
+        ],
+        "properties": {
+          "extension": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "member": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "offline",
+              "available",
+              "ringing",
+              "on-call",
+              "on-hold",
+              "dnd"
+            ]
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "dnd": {
+            "type": "boolean"
+          },
+          "call": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LiveAgentCall"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "LiveWaiting": {
+        "type": "object",
+        "required": [
+          "linkedid",
+          "caller",
+          "stage",
+          "since",
+          "ringing"
+        ],
+        "properties": {
+          "linkedid": {
+            "type": "string"
+          },
+          "caller": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "welcome",
+              "ringing"
+            ]
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ringing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "LiveBoard": {
+        "type": "object",
+        "required": [
+          "fresh",
+          "updated",
+          "agents",
+          "waiting"
+        ],
+        "properties": {
+          "fresh": {
+            "type": "boolean"
+          },
+          "updated": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LiveAgent"
+            }
+          },
+          "waiting": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LiveWaiting"
+            }
           }
         }
       }
