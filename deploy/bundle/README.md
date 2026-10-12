@@ -17,7 +17,10 @@ writes `/etc/tangra-asterisk` from this directory's configuration (listening
 on `MODULE_BIND_IP` only), runs preflight and starts `tangra-asterisk.service`.
 When a registration database was given, it also creates the module's
 tables there (`--adopt-registration` keeps a v3 history found in it).
-`--help` lists the options. Use one or the other, not both: they share the
+Running it again (e.g. `--latest` to upgrade) keeps an existing
+`/etc/tangra-asterisk/config.yaml` with the edits made on the host;
+`--reconfigure` rewrites it from this bundle (the old one is kept as a
+`.bak`). `--help` lists the options. Use one or the other, not both: they share the
 module's identity and ports.
 
 `private/enrollment.token` is the single-use enrolment token; `config.yaml`

@@ -5,7 +5,7 @@
 # /etc/tangra-asterisk from the configuration the gateway generated here
 # (config.yaml, policy.yaml, .env, private/).
 #
-#   sudo bash install-standalone.sh [--package FILE] [--latest] [--adopt-registration] [--no-start]
+#   sudo bash install-standalone.sh [--package FILE] [--latest] [--adopt-registration] [--reconfigure] [--no-start]
 #
 #   --package FILE  install this .deb/.rpm instead of downloading it (it must
 #                   still match the checksums pinned in this bundle)
@@ -13,9 +13,13 @@
 #                   checked against that release's SHA256SUMS only
 #   --adopt-registration  the registration database holds a v3 history
 #                   (pjsip_registration_events): keep and continue it
+#   --reconfigure   rewrite /etc/tangra-asterisk/config.yaml from this bundle
+#                   even though it exists (the old file is kept as a .bak)
 #   --no-start      configure everything, but do not enable or start the service
 #
-# Run it again to re-apply the configuration. Remove with `apt purge
+# Run it again to upgrade: an existing /etc/tangra-asterisk/config.yaml (with
+# any edits made on this host) is kept; --reconfigure re-applies the bundle's.
+# Remove with `apt purge
 # tangra-asterisk` / `dnf remove tangra-asterisk` (purge also forgets the
 # module's mesh identity).
 set -euo pipefail
@@ -29,14 +33,15 @@ UNIT=tangra-asterisk.service
 die() { echo "install-standalone: $*" >&2; exit 1; }
 note() { echo "install-standalone: $*"; }
 
-package="" latest=0 start=1 adopt=0
+package="" latest=0 start=1 adopt=0 reconfigure=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --package) [ $# -ge 2 ] || die "--package needs a file"; package="$(realpath "$2")"; shift 2 ;;
     --latest) latest=1; shift ;;
     --no-start) start=0; shift ;;
     --adopt-registration) adopt=1; shift ;;
-    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --reconfigure) reconfigure=1; shift ;;
+    -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown argument: $1 (see --help)" ;;
   esac
 done
@@ -127,29 +132,38 @@ case "$fmt" in
 esac
 getent passwd "$NAME" >/dev/null || die "the package did not create the $NAME user"
 
-# The bundle's config.yaml is written for the container's paths: point it at
-# this host's (state, token, policy, recordings) and listen on the mesh IP
-# only, as the compose file's port bindings did.
-sed -e "s#token_file: /run/secrets/asterisk.token#token_file: $ETC/private/enrollment.token#" \
-    -e "s#state_file: /var/lib/asterisk-module/svid.json#state_file: $STATE/svid.json#" \
-    -e "s#path: /etc/asterisk-module/policy.yaml#path: $ETC/policy.yaml#" \
-    -e "s#recording_root: /recordings\$#recording_root: $recordings#" \
-    -e "s#http_addr: 0.0.0.0:8444#http_addr: $bind_ip:8444#" \
-    -e "s#grpc_addr: 0.0.0.0:9444#grpc_addr: $bind_ip:9444#" \
-    config.yaml > "$work/config.yaml"
-if [ "$adopt" = 1 ] && ! grep -q '^  adopt_registration:' "$work/config.yaml"; then
-  sed -i 's/^\(  registration_dsn: .*\)$/\1\n  adopt_registration: true/' "$work/config.yaml"
-fi
-for want_line in "token_file: $ETC/private/enrollment.token" "state_file: $STATE/svid.json" \
-  "path: $ETC/policy.yaml" "recording_root: $recordings" "http_addr: $bind_ip:8444" "grpc_addr: $bind_ip:9444"; do
-  grep -qF "$want_line" "$work/config.yaml" || die "config.yaml has an unexpected layout: could not set '$want_line'"
-done
-
 install -d -m 0750 -o root -g "$NAME" "$ETC" "$ETC/private"
-if [ -f "$ETC/config.yaml" ] && ! cmp -s "$work/config.yaml" "$ETC/config.yaml"; then
-  cp -p "$ETC/config.yaml" "$ETC/config.yaml.bak-$(date -u +%Y%m%d-%H%M%S)"
+backup() { cp -p "$ETC/config.yaml" "$ETC/config.yaml.bak-$(date -u +%Y%m%d-%H%M%S)"; }
+if [ -f "$ETC/config.yaml" ] && [ "$reconfigure" = 0 ]; then
+  # An upgrade keeps the configuration in use: it may hold edits made on
+  # this host (DSNs, AMI credentials) that the bundle does not have.
+  note "keeping $ETC/config.yaml (run with --reconfigure to rewrite it from this bundle)"
+  if [ "$adopt" = 1 ] && ! grep -q '^  adopt_registration:' "$ETC/config.yaml"; then
+    grep -q '^  registration_dsn: ' "$ETC/config.yaml" || die "$ETC/config.yaml has no registration_dsn to adopt"
+    backup
+    sed -i 's/^\(  registration_dsn: .*\)$/\1\n  adopt_registration: true/' "$ETC/config.yaml"
+  fi
+else
+  # The bundle's config.yaml is written for the container's paths: point it at
+  # this host's (state, token, policy, recordings) and listen on the mesh IP
+  # only, as the compose file's port bindings did.
+  sed -e "s#token_file: /run/secrets/asterisk.token#token_file: $ETC/private/enrollment.token#" \
+      -e "s#state_file: /var/lib/asterisk-module/svid.json#state_file: $STATE/svid.json#" \
+      -e "s#path: /etc/asterisk-module/policy.yaml#path: $ETC/policy.yaml#" \
+      -e "s#recording_root: /recordings\$#recording_root: $recordings#" \
+      -e "s#http_addr: 0.0.0.0:8444#http_addr: $bind_ip:8444#" \
+      -e "s#grpc_addr: 0.0.0.0:9444#grpc_addr: $bind_ip:9444#" \
+      config.yaml > "$work/config.yaml"
+  if [ "$adopt" = 1 ] && ! grep -q '^  adopt_registration:' "$work/config.yaml"; then
+    sed -i 's/^\(  registration_dsn: .*\)$/\1\n  adopt_registration: true/' "$work/config.yaml"
+  fi
+  for want_line in "token_file: $ETC/private/enrollment.token" "state_file: $STATE/svid.json" \
+    "path: $ETC/policy.yaml" "recording_root: $recordings" "http_addr: $bind_ip:8444" "grpc_addr: $bind_ip:9444"; do
+    grep -qF "$want_line" "$work/config.yaml" || die "config.yaml has an unexpected layout: could not set '$want_line'"
+  done
+  if [ -f "$ETC/config.yaml" ] && ! cmp -s "$work/config.yaml" "$ETC/config.yaml"; then backup; fi
+  install -m 0640 -o root -g "$NAME" "$work/config.yaml" "$ETC/config.yaml"
 fi
-install -m 0640 -o root -g "$NAME" "$work/config.yaml" "$ETC/config.yaml"
 install -m 0640 -o root -g "$NAME" policy.yaml "$ETC/policy.yaml"
 # The service reads the token on every start; it is used only to enrol.
 install -m 0640 -o root -g "$NAME" private/enrollment.token "$ETC/private/enrollment.token"
