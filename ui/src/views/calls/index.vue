@@ -38,15 +38,15 @@ const columns:Column<SupportCall>[]=[
 ]
 function clear(){agent.value=type.value=caller.value=minTalk.value=quality.value=recorded.value='';void load(true)}
 </script>
-<template><UiPage title="Calls" subtitle="Search the team's calls and recordings"><template #filters><PeriodFilter v-model:from="from" v-model:to="to" :loading="loading" @submit="load(true)"/><div class="flex flex-wrap items-end gap-3">
+<template><UiPage title="Calls" subtitle="Search the team's calls and recordings"><template #filters><PeriodFilter v-model:from="from" v-model:to="to" :loading="loading" @submit="load(true)">
  <UiSelect id="call-agent" v-model="agent" label="Agent" :options="agents"/>
  <UiSelect id="call-type" v-model="type" label="Call" :options="Object.entries(TYPES).map(([value,t])=>({title:t.label,value}))"/>
  <UiInput id="call-caller" v-model="caller" label="Number contains"/>
  <UiSelect id="call-talk" v-model="minTalk" label="Talk" :options="[{title:'At least 1 min',value:'60'},{title:'At least 5 min',value:'300'},{title:'At least 15 min',value:'900'}]"/>
  <UiSelect id="call-quality" v-model="quality" label="Quality" :options="[{title:'Poor only',value:'poor'}]"/>
  <UiSelect id="call-recorded" v-model="recorded" label="Recording" :options="[{title:'Recorded only',value:'true'}]"/>
- <UiButton @click="load(true)">Search</UiButton><UiButton variant="text" @click="clear">Clear</UiButton>
-</div></template>
+ <template #actions><UiButton :disabled="loading" @click="load(true)">Search</UiButton><UiButton variant="text" @click="clear">Clear</UiButton></template>
+</PeriodFilter></template>
 <UiAlert v-if="error" kind="error">{{error}}<template v-if="unavailable"> The search needs the support reports (the module-owned database). <RouterLink :to="{name:'asterisk-call-log'}">Open the raw call log</RouterLink>.</template></UiAlert>
 <UiCard :padded="false"><div @keydown="rows.onKeydown"><UiDataTable :items="result?.items??[]" :columns="columns" row-key="linkedid" :row-attrs="rows.rowAttrs" :total="result?.total??0" :page="page" :page-size="size" :loading="loading" caption="Calls, newest first: select one to see details and listen" empty-title="No calls" empty-text="Try another period or fewer filters." clickable @row-click="selected=$event.linkedid" @update:page="page=$event;load()" @update:page-size="size=$event;load(true)">
  <template #cell-type="{row}"><UiBadge :color="TYPES[row.type].color" size="sm" soft><UiIcon :name="TYPES[row.type].icon" size="xs"/> {{TYPES[row.type].label}}</UiBadge><span v-if="row.type==='lost'" class="text-sm"> {{lostText(row.outcome,row.lostReason)}}</span></template>
