@@ -1,0 +1,6 @@
+{
+ "kind": "inbound-group",
+ "outcome": "abandoned-before-group",
+ "announcementSeconds": 11,
+ "legs": {}
+}

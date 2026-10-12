@@ -1,0 +1,2 @@
+linkedid	uniqueid	sequence	calldate	channel	dstchannel	src	dst	dcontext	lastapp	lastdata	disposition	duration	billsec	rtpqos	peerrtpqos	recorded
+1767600000.300	1767600000.300	103483	2026-01-08 09:20:51	PJSIP/ITD-0000ea25		n00000001	s	app-announcement-1	Playback	custom/welcome,noanswer	ANSWERED	10	10	ssrc=1668006534;themssrc=652316700;lp=0;rxjitter=0.000000;rxcount=518;txjitter=0.001625;txcount=469;rlp=0;rtt=0.000366;rxmes=88.084267;txmes=88.087887		0

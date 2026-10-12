@@ -1,0 +1,10 @@
+{
+ "kind": "inbound-group",
+ "group": "600",
+ "outcome": "lost",
+ "lostReason": "no-agent-available",
+ "announcementSeconds": 19,
+ "ringSeconds": 0,
+ "callerWaitSeconds": 19,
+ "legs": {}
+}

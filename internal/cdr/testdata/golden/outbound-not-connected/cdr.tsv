@@ -1,0 +1,2 @@
+linkedid	uniqueid	sequence	calldate	channel	dstchannel	src	dst	dcontext	lastapp	lastdata	disposition	duration	billsec	rtpqos	peerrtpqos	recorded
+1767600000.500	1767600000.500	103485	2026-01-08 09:26:06	PJSIP/48-0000ea27	PJSIP/ITD-0000ea28	n00000001	n00000002	from-internal	Dial	PJSIP/#@ITD,300,Ttb(func-apply-sipheaders^s^1,(2))U(sub-send-obroute-e	NO ANSWER	20	0			0

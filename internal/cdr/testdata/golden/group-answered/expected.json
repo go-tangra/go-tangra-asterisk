@@ -1,0 +1,25 @@
+{
+ "kind": "inbound-group",
+ "group": "600",
+ "outcome": "answered",
+ "agent": "49",
+ "announcementSeconds": 18,
+ "ringSeconds": 23,
+ "callerWaitSeconds": 41,
+ "talkSeconds": 72,
+ "legs": {
+  "49": "answered",
+  "41": "declined",
+  "22": "colleague-answered",
+  "30": "colleague-answered",
+  "35": "colleague-answered",
+  "36": "colleague-answered",
+  "40": "colleague-answered",
+  "18": "colleague-answered",
+  "45": "colleague-answered",
+  "48": "colleague-answered",
+  "51": "colleague-answered",
+  "54": "colleague-answered",
+  "55": "colleague-answered"
+ }
+}
