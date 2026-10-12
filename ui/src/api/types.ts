@@ -16,6 +16,8 @@ export interface RegistrationEvent extends Record<string, unknown> {id:number;ti
 export interface RegistrationHistory {items:RegistrationEvent[];total?:number;page?:number;page_size?:number;truncated?:boolean;has_more?:boolean}
 export interface RegistrationStatus {extension:string;at:string;status:string;registered:boolean;certainty:string;lastEvent:RegistrationEvent|null;expiresAt:string|null}
 export interface Gap {start:string;end:string}
+export type RegistrationSegment = components['schemas']['RegistrationSegment']
+export type RegistrationTimeline = components['schemas']['RegistrationTimeline']
 export interface LiveCall {linkedid:string;channels:{uniqueid:string;channel:string;caller:string;connected:string;state:string;bridge:string}[]}
 export interface LiveSnapshot {calls:LiveCall[];generation:number;fresh:boolean;updated:string}
 export interface LiveUpdate {call?:LiveCall;linkedid?:string;generation:number;fresh:boolean}
