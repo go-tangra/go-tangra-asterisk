@@ -1182,6 +1182,109 @@
         ]
       }
     },
+    "/api/asterisk/registration/timeline/{extension}": {
+      "get": {
+        "operationId": "registration__registration_timeline_extension",
+        "x-freya-permission": "registration:read",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistrationTimeline"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "extension",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": true
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": true
+          }
+        ]
+      }
+    },
     "/api/asterisk/live/calls": {
       "get": {
         "operationId": "live__live_calls",
@@ -2322,6 +2425,107 @@
           },
           "uncertain": {
             "type": "boolean"
+          }
+        }
+      },
+      "RegistrationSegment": {
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "state"
+        ],
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "online",
+              "offline",
+              "unknown"
+            ]
+          },
+          "contact": {
+            "type": "string"
+          },
+          "userAgent": {
+            "type": "string"
+          },
+          "viaAddress": {
+            "type": "string"
+          }
+        }
+      },
+      "RegistrationTimelineSummary": {
+        "type": "object",
+        "required": [
+          "onlineSeconds",
+          "offlineSeconds",
+          "unknownSeconds",
+          "dropouts",
+          "longestOfflineSeconds"
+        ],
+        "properties": {
+          "onlineSeconds": {
+            "type": "integer"
+          },
+          "offlineSeconds": {
+            "type": "integer"
+          },
+          "unknownSeconds": {
+            "type": "integer"
+          },
+          "dropouts": {
+            "type": "integer"
+          },
+          "longestOfflineSeconds": {
+            "type": "integer"
+          }
+        }
+      },
+      "RegistrationTimeline": {
+        "type": "object",
+        "required": [
+          "extension",
+          "from",
+          "to",
+          "segments",
+          "gaps",
+          "summary"
+        ],
+        "properties": {
+          "extension": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RegistrationSegment"
+            }
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Gap"
+            }
+          },
+          "summary": {
+            "$ref": "#/components/schemas/RegistrationTimelineSummary"
           }
         }
       },

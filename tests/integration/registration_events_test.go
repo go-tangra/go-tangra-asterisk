@@ -43,3 +43,53 @@ func TestRegistrationEventsPaging(t *testing.T) {
 		t.Fatalf("page 2: total=%d len=%d %v", total, len(second), e)
 	}
 }
+
+// The timeline starts from the state before the period (the last event of
+// each contact) and splits at the period's events and expiries.
+func TestRegistrationTimeline(t *testing.T) {
+	c, _, _ := fixture(t)
+	if c.Binding.RegistrationDSN == "" {
+		t.Skip("set ASTERISK_FIXTURE_REGISTRATION_DSN to run registration fixture tests")
+	}
+	ctx := context.Background()
+	if e := registration.Bootstrap(ctx, c); e != nil {
+		t.Fatal(e)
+	}
+	store, e := registration.Open(ctx, c)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer store.DB.Close()
+	for _, q := range []string{"DELETE FROM pjsip_registration_events", "DELETE FROM asterisk_observation_gaps"} {
+		if _, e = store.DB.ExecContext(ctx, q); e != nil {
+			t.Fatal(e)
+		}
+	}
+	from := time.Now().UTC().Truncate(time.Second).Add(-4 * time.Hour)
+	for _, ev := range []registration.Event{
+		{Endpoint: "01", Contact: "sip:a", Time: from.Add(-time.Hour), Status: "Created"},
+		{Endpoint: "01", Contact: "sip:a", Time: from.Add(time.Hour), Status: "Removed"},
+		{Endpoint: "01", Contact: "sip:a", Time: from.Add(2 * time.Hour), Status: "Created", Expire: from.Add(3 * time.Hour)},
+		{Endpoint: "02", Contact: "sip:b", Time: from, Status: "Created"},
+	} {
+		if e = store.Append(ctx, ev); e != nil {
+			t.Fatal(e)
+		}
+	}
+	tl, e := store.Timeline(ctx, "t", "01", from, from.Add(4*time.Hour))
+	if e != nil {
+		t.Fatal(e)
+	}
+	want := []string{registration.Online, registration.Offline, registration.Online, registration.Offline}
+	if len(tl.Segments) != len(want) {
+		t.Fatalf("segments: %+v", tl.Segments)
+	}
+	for i, s := range tl.Segments {
+		if s.State != want[i] || !s.Start.Equal(from.Add(time.Duration(i)*time.Hour)) {
+			t.Fatalf("segment %d: %+v", i, s)
+		}
+	}
+	if tl.Summary.Dropouts != 2 || tl.Summary.OnlineSeconds != 7200 {
+		t.Fatalf("summary: %+v", tl.Summary)
+	}
+}

@@ -53,9 +53,7 @@ func Evaluate(ext string, at time.Time, input []Event, gaps []Gap) Status {
 		s.Certainty = "observed"
 	}
 	for _, e := range contacts {
-		state := strings.ToLower(e.Status)
-		qualifies := state == "created" || state == "updated" || state == "reachable" || state == "unqualified" || state == "avail" || state == "available"
-		if qualifies && (e.Expire.IsZero() || at.Before(e.Expire)) {
+		if registeredAt(e, at) {
 			s.Registered = true
 			if !e.Expire.IsZero() && (s.ExpiresAt == nil || e.Expire.After(*s.ExpiresAt)) {
 				v := e.Expire
@@ -72,4 +70,14 @@ func Evaluate(ext string, at time.Time, input []Event, gaps []Gap) Status {
 		s.Status = "expired"
 	}
 	return s
+}
+
+// registeredAt reports whether a contact's last observation e means it was
+// registered at t: a registering or reachable status that has not expired.
+func registeredAt(e Event, t time.Time) bool {
+	switch strings.ToLower(e.Status) {
+	case "created", "updated", "reachable", "unqualified", "avail", "available":
+		return e.Expire.IsZero() || t.Before(e.Expire)
+	}
+	return false
 }

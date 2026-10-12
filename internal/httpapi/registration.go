@@ -4,6 +4,7 @@ import (
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/registration"
 	"net/http"
 	"sort"
+	"time"
 )
 
 func (s *Server) registrationStatus(w http.ResponseWriter, r *http.Request) {
@@ -67,4 +68,26 @@ func (s *Server) registrationEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jsonResponse(w, map[string]any{"items": v, "total": total, "page": page, "page_size": size, "sort": sort, "order": order})
+}
+
+// registrationTimeline answers when an extension was online during a period:
+// its registration states as consecutive segments (at most 31 days, so the
+// event bound holds for chatty phones).
+func (s *Server) registrationTimeline(w http.ResponseWriter, r *http.Request) {
+	store := s.registration()
+	if store == nil {
+		writeError(w, r, 503, "FEATURE_UNAVAILABLE")
+		return
+	}
+	from, to, e := interval(r)
+	if e != nil || to.Sub(from) > 31*24*time.Hour {
+		writeError(w, r, 400, "INVALID_ARGUMENT")
+		return
+	}
+	v, e := store.Timeline(r.Context(), tenant(r), r.PathValue("extension"), from, to)
+	if e != nil {
+		failure(w, r, e)
+		return
+	}
+	jsonResponse(w, v)
 }
