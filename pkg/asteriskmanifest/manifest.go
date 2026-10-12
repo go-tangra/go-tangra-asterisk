@@ -18,7 +18,7 @@ import (
 const (
 	Module       = "asterisk"
 	DisplayName  = "Asterisk"
-	Version      = "1.1.0" // bump on every manifest change (TestManifestVersionPinned)
+	Version      = "1.2.0" // bump on every manifest change (TestManifestVersionPinned)
 	RemotePrefix = "/ui"
 	APIPrefix    = "/api/asterisk"
 )

@@ -4,7 +4,7 @@ What the refactored module measures, and how each number is derived from
 Asterisk data. Written from a survey of the production FreePBX host
 (`tools/phase0/survey.sh`) and a full weekday of anonymised calls. Phase 1
 implements these rules; the golden fixtures in
-`internal/cdr/testdata/golden/` pin them.
+`internal/support/testdata/golden/` pin them.
 
 ## The PBX this is written for
 
@@ -122,7 +122,7 @@ RTT, MOS band. "Bad" = loss > 3 %, jitter > 30 ms, or RTT > 300 ms.
 
 ## Golden fixtures
 
-`internal/cdr/testdata/golden/<case>/` holds `cdr.tsv` and `cel.tsv` exactly
+`internal/support/testdata/golden/<case>/` holds `cdr.tsv` and `cel.tsv` exactly
 as the survey exports them (one call each, ids replaced, external numbers
 replaced by `n0000000x`, addresses removed, date moved to 2026-01-08) and
 `expected.json` with the outcome these rules give.

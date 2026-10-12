@@ -16,6 +16,9 @@ All paths below are relative to `/api/asterisk` and require verified tenant bind
 | GET /registration/events | registration:read | from,to,extension,pagination; observed events |
 | GET /registration/online | registration:read | optional at; endpoints plus uncertainty/gap metadata |
 | GET /registration/timeline/{extension} | registration:read | from,to (≤31 days, capped at now); online/offline/unknown segments, gaps, summary |
+| GET /support/summary | stats:read | from,to (≤92 days); support team, inbound group calls by outcome and lost reason, caller wait and announcement spreads, callbacks, direct and outbound totals, last ingest time |
+| GET /support/agents | stats:read | from,to (≤92 days); per agent: offered/answered/declined/colleague-answered/rang-while-lost, time to answer, talk, direct, outbound, callbacks; every team member listed |
+| GET /support/lost | stats:read | from,to (≤92 days), page, page_size; lost and announcement-abandoned group calls, newest first, with the extensions that rang and the callback |
 | GET /live/calls | live:read | current calls and freshness |
 | GET /live/calls/stream | live:read | text/event-stream; snapshot, upsert, remove, status; periodic heartbeat comments |
 | GET /recordings/{linkedid} | recordings:read + calls:read | CDR-selected media; full 200, valid range 206, unsatisfiable range 416 |

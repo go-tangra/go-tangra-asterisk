@@ -15,6 +15,7 @@ import (
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/recordings"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/registration"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/stats"
+	"github.com/go-tangra/go-tangra-asterisk/v4/internal/support"
 	"github.com/go-tangra/go-tangra-asterisk/v4/ui"
 	authv1 "github.com/go-tangra/go-tangra-auth/sdk/v4/api/proto/auth/v1"
 	"github.com/go-tangra/go-tangra-auth/sdk/v4/pkg/authclient"
@@ -47,6 +48,7 @@ type App struct {
 	Log           *slog.Logger
 	registration  atomic.Pointer[registration.Repository]
 	recordings    atomic.Pointer[recordings.Handler]
+	support       atomic.Pointer[support.Service]
 	openLate      []func(context.Context) // features Run keeps retrying to open
 	wg            sync.WaitGroup
 	closeOnce     sync.Once
@@ -133,6 +135,9 @@ func Build(ctx context.Context, c config.Config, o Options) (a *App, err error) 
 			return nil
 		})
 	}
+	if c.Binding.RegistrationDSN != "" && c.Support.On() {
+		a.feature(ctx, "support reports", a.ingest, a.openSupport)
+	}
 	if c.Binding.RecordingRoot != "" {
 		a.feature(ctx, "recordings", nil, func(context.Context) error {
 			h, e := recordings.New(c.Binding.RecordingRoot, repo)
@@ -152,9 +157,14 @@ func Build(ctx context.Context, c config.Config, o Options) (a *App, err error) 
 		}
 	}
 	remote, _ := ui.Remote()
-	a.HTTP, err = httpapi.New(httpapi.Deps{Log: a.Log, Tenant: c.Binding.TenantID, Timezone: location.String(), Verifier: a.Verifier, Checker: a.Checker, History: repo, Reports: reports, Registry: a.Registry, Registration: a.registration.Load, Recordings: a.recordings.Load, Dashboard: metrics, AMIEnabled: c.AMI.On(), StreamLifetime: time.Duration(c.StreamSeconds) * time.Second, Ready: a.ready, Remote: remote, Stop: a.streamStop, RegistrationFresh: func() bool { return a.Listener != nil && a.Listener.RegistrationFresh.Load() }, Capabilities: func(ctx context.Context) map[string]httpapi.Capability {
+	a.HTTP, err = httpapi.New(httpapi.Deps{Log: a.Log, Tenant: c.Binding.TenantID, Timezone: location.String(), Verifier: a.Verifier, Checker: a.Checker, History: repo, Reports: reports, Registry: a.Registry, Registration: a.registration.Load, Recordings: a.recordings.Load, Dashboard: metrics, AMIEnabled: c.AMI.On(), StreamLifetime: time.Duration(c.StreamSeconds) * time.Second, Ready: a.ready, Remote: remote, Stop: a.streamStop, RegistrationFresh: func() bool { return a.Listener != nil && a.Listener.RegistrationFresh.Load() }, Support: func() httpapi.Support {
+		if v := a.support.Load(); v != nil {
+			return v
+		}
+		return nil
+	}, Capabilities: func(ctx context.Context) map[string]httpapi.Capability {
 		ready := a.ready(ctx) == nil
-		return map[string]httpapi.Capability{"history": {Available: ready, Fresh: ready}, "cel": {Available: a.Pools.CEL, Fresh: ready}, "quality": {Available: a.Pools.Columns["rtpqos"] || a.Pools.Columns["peerrtpqos"], Fresh: ready}, "names": {Available: a.Pools.Names, Fresh: ready}}
+		return map[string]httpapi.Capability{"history": {Available: ready, Fresh: ready}, "cel": {Available: a.Pools.CEL, Fresh: ready}, "quality": {Available: a.Pools.Columns["rtpqos"] || a.Pools.Columns["peerrtpqos"], Fresh: ready}, "names": {Available: a.Pools.Names, Fresh: ready}, "support": {Available: a.support.Load() != nil, Fresh: ready}}
 	}})
 	if err != nil {
 		return nil, err
@@ -238,6 +248,32 @@ func (a *App) prune(ctx context.Context) {
 		}
 	}
 }
+
+// openSupport opens the support store in the module-owned database (creating
+// its tables) and checks that CEL carries what the rules read.
+func (a *App) openSupport(ctx context.Context) error {
+	src := &support.Source{CDR: a.Pools.CDR, Config: a.Pools.Config}
+	if err := src.Probe(ctx); err != nil {
+		return err
+	}
+	db, err := pbx.OpenDB(ctx, a.Cfg.Binding.RegistrationDSN, "UTC")
+	if err != nil {
+		return errors.New("support store unavailable")
+	}
+	store := &support.Store{DB: db, Tenant: a.Cfg.Binding.TenantID}
+	if err = store.Migrate(ctx); err != nil {
+		db.Close()
+		return errors.New("support tables could not be created")
+	}
+	s := a.Cfg.Support
+	a.support.Store(&support.Service{Source: src, Store: store, Log: a.Log, Groups: s.Groups, Exclude: s.Exclude, Callback: time.Duration(s.CallbackMinutes) * time.Minute})
+	return nil
+}
+
+// ingest follows the PBX call tables into the support store (the first run
+// backfills the history).
+func (a *App) ingest(ctx context.Context) { a.support.Load().Run(ctx) }
+
 func (a *App) worker(ctx context.Context, f func(context.Context)) {
 	a.wg.Add(1)
 	go func() { defer a.wg.Done(); f(ctx) }()
@@ -269,6 +305,9 @@ func (a *App) Run(ctx context.Context) error {
 	if a.registration.Load() != nil {
 		a.worker(wctx, a.prune)
 	}
+	if a.support.Load() != nil {
+		a.worker(wctx, a.ingest)
+	}
 	for _, open := range a.openLate {
 		a.worker(wctx, open)
 	}
@@ -291,6 +330,9 @@ func (a *App) Close() {
 		}
 		if r := a.registration.Load(); r != nil {
 			r.DB.Close()
+		}
+		if v := a.support.Load(); v != nil {
+			v.Store.DB.Close()
 		}
 		if a.Pools != nil {
 			a.Pools.Close()

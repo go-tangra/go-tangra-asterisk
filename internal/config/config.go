@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 )
 
@@ -25,9 +26,23 @@ type Config struct {
 	// module does; a SPIRE workload socket (identity.provider: spiffe) remains
 	// possible where SPIRE runs.
 	MeshEnroll          MeshEnroll `yaml:"mesh_enroll"`
+	Support             Support    `yaml:"support"`
 	QueryTimeoutSeconds int        `yaml:"query_timeout_seconds"`
 	StreamSeconds       int        `yaml:"stream_seconds"`
 }
+
+// Support configures the support-team reports (docs/support-metrics.md).
+// They need the module-owned database (binding.registration_dsn) and CEL.
+type Support struct {
+	Enabled         *bool    `yaml:"enabled"`          // default on
+	Groups          []string `yaml:"groups"`           // support ring groups; empty: all
+	Exclude         []string `yaml:"exclude"`          // extensions or ranges ("201-211") outside the team
+	CallbackMinutes int      `yaml:"callback_minutes"` // a lost call counts as called back within this
+}
+
+// On reports whether the support reports run.
+func (s Support) On() bool { return s.Enabled == nil || *s.Enabled }
+
 type Binding struct {
 	TenantID          string `yaml:"tenant_id"`
 	PBXID             string `yaml:"pbx_id"`
@@ -78,12 +93,14 @@ type Gateway struct {
 	Issuer  string `yaml:"issuer"`
 }
 
+var extensionRange = regexp.MustCompile(`^[0-9]+(-[0-9]+)?$`)
+
 func Default() Config {
 	f := fconfig.Default()
 	f.ServiceName = "asterisk"
 	f.Server.HTTPAddr = ":8444"
 	f.Limits.RequestTimeout = 300 * time.Second
-	return Config{Config: f, Binding: Binding{Timezone: "Europe/Sofia", SourceTimezone: "Europe/Sofia", RegistrationRetentionDays: 400}, Gateway: Gateway{Service: "gateway"}, QueryTimeoutSeconds: 5, StreamSeconds: 240}
+	return Config{Config: f, Binding: Binding{Timezone: "Europe/Sofia", SourceTimezone: "Europe/Sofia", RegistrationRetentionDays: 400}, Gateway: Gateway{Service: "gateway"}, Support: Support{CallbackMinutes: 120}, QueryTimeoutSeconds: 5, StreamSeconds: 240}
 }
 func Load(path string) (Config, error) {
 	c, e := Parse(path)
@@ -195,6 +212,15 @@ func (c Config) ValidateAll() []error {
 		u, e := url.Parse(c.Binding.MonitoringURL)
 		if e != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || !c.Binding.MonitoringDedicated {
 			fail("dedicated monitoring upstream required")
+		}
+	}
+	if c.Support.CallbackMinutes < 1 || c.Support.CallbackMinutes > 1440 {
+		fail("support.callback_minutes must be 1 to 1440")
+	}
+	for _, e := range append(append([]string{}, c.Support.Groups...), c.Support.Exclude...) {
+		if !extensionRange.MatchString(e) {
+			fail("support.groups and support.exclude take numbers or number ranges")
+			break
 		}
 	}
 	if c.Gateway.Issuer == "" || c.Gateway.Service == "" {
