@@ -340,6 +340,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/asterisk/support/calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["support__calls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/asterisk/support/listens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["support__listens"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -716,6 +748,44 @@ export interface components {
             updated: string;
             agents: components["schemas"]["LiveAgent"][];
             waiting: components["schemas"]["LiveWaiting"][];
+        };
+        SupportCall: {
+            linkedid: string;
+            /** Format: date-time */
+            start: string;
+            /** @enum {string} */
+            type: "answered" | "lost" | "outbound" | "not-connected";
+            kind: string;
+            outcome: string;
+            lostReason: string;
+            agent: string;
+            caller: string;
+            waitSeconds: number | null;
+            talkSeconds: number | null;
+            rang: string[];
+            recorded: boolean;
+            /** @enum {string} */
+            quality: "" | "good" | "fair" | "poor";
+        };
+        SupportCallPage: {
+            timezone: string;
+            team: string[];
+            names: {
+                [key: string]: string;
+            };
+            items: components["schemas"]["SupportCall"][];
+            total: number;
+            page: number;
+            page_size: number;
+        };
+        SupportListen: {
+            /** Format: date-time */
+            at: string;
+            userId: string;
+            linkedid: string;
+        };
+        SupportListens: {
+            items: components["schemas"]["SupportListen"][];
         };
     };
     responses: never;
@@ -2133,6 +2203,151 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LiveBoard"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    support__calls: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                page?: number;
+                page_size?: number;
+                agent?: string;
+                type?: "answered" | "lost" | "outbound" | "not-connected";
+                caller?: string;
+                min_talk?: number;
+                quality?: "poor";
+                recorded?: "true";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportCallPage"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    support__listens: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                linkedid?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportListens"];
                 };
             };
             /** @description Invalid request */

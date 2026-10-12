@@ -25,13 +25,16 @@ type Store struct {
 
 // Migrate creates the support tables when missing.
 func (s *Store) Migrate(ctx context.Context) error {
-	raw, _ := migrations.ReadFile("migrations/001.sql")
-	for _, q := range strings.Split(string(raw), ";") {
-		if strings.TrimSpace(q) == "" {
-			continue
-		}
-		if _, err := s.DB.ExecContext(ctx, q); err != nil {
-			return err
+	files, _ := migrations.ReadDir("migrations") // in name order; every statement is idempotent
+	for _, f := range files {
+		raw, _ := migrations.ReadFile("migrations/" + f.Name())
+		for _, q := range strings.Split(string(raw), ";") {
+			if strings.TrimSpace(q) == "" {
+				continue
+			}
+			if _, err := s.DB.ExecContext(ctx, q); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -172,4 +175,57 @@ func (s *Store) Period(ctx context.Context, tenant string, from, to time.Time) (
 		}
 	}
 	return calls, rows.Err()
+}
+
+// Listen is one person opening a call recording.
+type Listen struct {
+	At       time.Time `json:"at"`
+	UserID   string    `json:"userId"`
+	LinkedID string    `json:"linkedid"`
+}
+
+// listenRepeat: range requests of one playback (seeking, the browser
+// re-fetching) within this window count once.
+const listenRepeat = 10 * time.Minute
+
+// RecordListen notes that user opened the recording of linkedid.
+func (s *Store) RecordListen(ctx context.Context, tenant, user, linkedid string, at time.Time) error {
+	if tenant == "" || tenant != s.Tenant {
+		return ErrDenied
+	}
+	var n int
+	if err := s.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM support_listens WHERE linkedid=? AND user_id=? AND listened_at>?", linkedid, user, at.Add(-listenRepeat).UTC()).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	_, err := s.DB.ExecContext(ctx, "INSERT INTO support_listens (listened_at,user_id,linkedid) VALUES (?,?,?)", at.UTC(), user, linkedid)
+	return err
+}
+
+// Listens lists who opened recordings in [from,to) (of one call when
+// linkedid is set), newest first, at most 500.
+func (s *Store) Listens(ctx context.Context, tenant string, from, to time.Time, linkedid string) ([]Listen, error) {
+	if tenant == "" || tenant != s.Tenant {
+		return nil, ErrDenied
+	}
+	q, args := "SELECT listened_at,user_id,linkedid FROM support_listens WHERE listened_at>=? AND listened_at<?", []any{from.UTC(), to.UTC()}
+	if linkedid != "" {
+		q, args = q+" AND linkedid=?", append(args, linkedid)
+	}
+	rows, err := s.DB.QueryContext(ctx, q+" ORDER BY listened_at DESC, id DESC LIMIT 500", args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Listen{}
+	for rows.Next() {
+		var l Listen
+		if err = rows.Scan(&l.At, &l.UserID, &l.LinkedID); err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
 }

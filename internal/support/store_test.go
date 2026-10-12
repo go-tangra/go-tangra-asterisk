@@ -169,3 +169,32 @@ func dbsAsAny(dbs []*memory.Database) []gms.Database {
 	}
 	return out
 }
+
+func TestListens(t *testing.T) {
+	db := open(t, mysqlServer(t, "owned")+"owned", "UTC")
+	ctx := context.Background()
+	store := &Store{DB: db, Tenant: "t"}
+	if err := store.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
+	for _, l := range []struct {
+		user, call string
+		after      time.Duration
+	}{{"u1", "a", 0}, {"u1", "a", time.Minute}, {"u2", "a", 2 * time.Minute}, {"u1", "a", 15 * time.Minute}, {"u1", "b", 16 * time.Minute}} {
+		if err := store.RecordListen(ctx, "t", l.user, l.call, at.Add(l.after)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.RecordListen(ctx, "x", "u1", "a", at); err != ErrDenied {
+		t.Fatalf("other tenant: %v", err)
+	}
+	all, err := store.Listens(ctx, "t", at, at.Add(time.Hour), "")
+	if err != nil || len(all) != 4 || all[0].LinkedID != "b" {
+		t.Fatalf("seeking within 10 minutes counts once: %+v %v", all, err)
+	}
+	one, _ := store.Listens(ctx, "t", at, at.Add(time.Hour), "a")
+	if len(one) != 3 {
+		t.Fatalf("listens of call a: %+v", one)
+	}
+}

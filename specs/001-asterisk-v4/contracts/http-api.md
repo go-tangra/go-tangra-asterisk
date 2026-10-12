@@ -19,6 +19,8 @@ All paths below are relative to `/api/asterisk` and require verified tenant bind
 | GET /support/summary | stats:read | from,to (≤92 days); support team, inbound group calls by outcome and lost reason, caller wait and announcement spreads, callbacks, direct and outbound totals, last ingest time |
 | GET /support/agents | stats:read | from,to (≤92 days); per agent: offered/answered/declined/colleague-answered/rang-while-lost, time to answer, talk, direct, outbound, callbacks; every team member listed |
 | GET /support/lost | stats:read | from,to (≤92 days), page, page_size; lost and announcement-abandoned group calls, newest first, with the extensions that rang and the callback |
+| GET /support/calls | calls:read | from,to (≤92 days), page, page_size, agent, type (answered/lost/outbound/not-connected), caller (digits contained), min_talk, quality=poor, recorded=true; classified calls newest first with wait, talk, quality grade, phones rung; team and names |
+| GET /support/listens | recordings:read | from,to (≤92 days), linkedid; who opened which recording when (playbacks within 10 minutes count once) |
 | GET /live/calls | live:read | current calls and freshness |
 | GET /live/board | live:read | per agent (support team plus anyone on a call): offline/available/ringing/on-call/on-hold/dnd, since, current call (direction, peer, since); waiting callers (welcome or ringing, with the phones ringing) |
 | GET /live/calls/stream | live:read | text/event-stream; snapshot, upsert, remove, status; periodic heartbeat comments |

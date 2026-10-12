@@ -172,3 +172,11 @@ func (s *Service) CallbackWindow() time.Duration { return s.Callback }
 func (s *Service) Report(ctx context.Context, tenant string, from, to time.Time) ([]Call, error) {
 	return s.Store.Period(ctx, tenant, from, to.Add(s.Callback))
 }
+
+// RecordListen and Listens pass through to the store (recording audit).
+func (s *Service) RecordListen(ctx context.Context, tenant, user, linkedid string) error {
+	return s.Store.RecordListen(ctx, tenant, user, linkedid, time.Now())
+}
+func (s *Service) Listens(ctx context.Context, tenant string, from, to time.Time, linkedid string) ([]Listen, error) {
+	return s.Store.Listens(ctx, tenant, from, to, linkedid)
+}
