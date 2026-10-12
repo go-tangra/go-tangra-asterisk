@@ -33,7 +33,7 @@ support:
   # enabled: false       # turn the reports off
 ```
 
-To rebuild every call after a rule change, delete the cursor row (`DELETE FROM support_ingest` in the module-owned database); the next run re-classifies the history.
+When an upgrade changes the classification rules the module re-classifies the history by itself on start (a short backfill). To force it, delete the cursor row (`DELETE FROM support_ingest` in the module-owned database); the next run re-classifies the history.
 
 Registration uses a **separate module-owned** MySQL database. Only changes are stored: the minute-by-minute contact snapshot writes a row when a contact's status, AOR, user agent or address changes, or shortly before its stored expiry lapses (so a continuously registered phone never appears expired). Events older than `registration_retention_days` (default 400, `0` keeps them forever) are pruned hourly. Bootstrap is explicit:
 

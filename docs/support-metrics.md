@@ -107,8 +107,14 @@ All per agent and period (PBX timezone), and for the team.
 **Presence** (from the registration timeline, extended in phase 3)
 - online time, time on calls, **occupancy** = talk / online.
 
-**Quality** — per answered leg from `rtpqos`/`peerrtpqos`: loss %, jitter,
-RTT, MOS band. "Bad" = loss > 3 %, jitter > 30 ms, or RTT > 300 ms.
+**Quality** — FreePBX logs the RTP report of the channel that owns the CDR
+row, on the caller channel's last row (`peerrtpqos` repeats the same stream):
+an **inbound** call is measured on the provider line (trunk ↔ PBX), an
+**outbound** call on the agent's handset (PBX ↔ phone). Each call keeps its
+report and the side measured; the worst direction gives loss %, jitter, RTT
+and MOS. "Poor" = loss > 3 %, jitter > 30 ms, RTT > 300 ms or MOS below 3.6.
+The handset side of inbound calls is not in CDR (AMI RTCP events would add
+it).
 
 ## Open points carried into phase 1
 

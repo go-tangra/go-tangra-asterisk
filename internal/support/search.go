@@ -28,19 +28,20 @@ type Filter struct {
 
 // Row is one call in the search.
 type Row struct {
-	LinkedID   string    `json:"linkedid"`
-	Start      time.Time `json:"start"`
-	Type       string    `json:"type"`
-	Kind       string    `json:"kind"`
-	Outcome    string    `json:"outcome"`
-	LostReason string    `json:"lostReason"`
-	Agent      string    `json:"agent"`
-	Caller     string    `json:"caller"`
-	Wait       *int64    `json:"waitSeconds"`
-	Talk       *int64    `json:"talkSeconds"`
-	Rang       []string  `json:"rang"`
-	Recorded   bool      `json:"recorded"`
-	Quality    string    `json:"quality"` // good, fair, poor or "" when not measured
+	LinkedID    string    `json:"linkedid"`
+	Start       time.Time `json:"start"`
+	Type        string    `json:"type"`
+	Kind        string    `json:"kind"`
+	Outcome     string    `json:"outcome"`
+	LostReason  string    `json:"lostReason"`
+	Agent       string    `json:"agent"`
+	Caller      string    `json:"caller"`
+	Wait        *int64    `json:"waitSeconds"`
+	Talk        *int64    `json:"talkSeconds"`
+	Rang        []string  `json:"rang"`
+	Recorded    bool      `json:"recorded"`
+	Quality     string    `json:"quality"`     // good, fair, poor or "" when not measured
+	QualitySide string    `json:"qualitySide"` // trunk or phone: the leg measured
 }
 
 // Grade rates a leg's RTP report as docs/support-metrics.md defines "bad":
@@ -97,7 +98,7 @@ func Search(calls []Call, from, to time.Time, f Filter) []Row {
 		if !within(c, from, to) || t == "" || (f.Type != "" && f.Type != t) {
 			continue
 		}
-		r := Row{LinkedID: c.LinkedID, Start: c.Start, Type: t, Kind: c.Kind, Outcome: c.Outcome, LostReason: c.LostReason, Agent: c.Agent, Caller: c.Caller, Wait: c.CallerWait, Talk: c.Talk, Recorded: c.Recorded, Quality: Grade(c.Quality), Rang: []string{}}
+		r := Row{LinkedID: c.LinkedID, Start: c.Start, Type: t, Kind: c.Kind, Outcome: c.Outcome, LostReason: c.LostReason, Agent: c.Agent, Caller: c.Caller, Wait: c.CallerWait, Talk: c.Talk, Recorded: c.Recorded, Quality: Grade(c.Quality), QualitySide: c.QualitySide, Rang: []string{}}
 		involved := f.Agent == "" || c.Agent == f.Agent
 		for _, l := range c.Legs {
 			r.Rang = append(r.Rang, l.Extension)

@@ -198,3 +198,29 @@ func TestListens(t *testing.T) {
 		t.Fatalf("listens of call a: %+v", one)
 	}
 }
+
+func TestMigrateReclassifiesOncePerVersion(t *testing.T) {
+	db := open(t, mysqlServer(t, "owned")+"owned", "UTC")
+	ctx := context.Background()
+	store := &Store{DB: db, Tenant: "t"}
+	cursor := func() int64 {
+		n, err := store.Cursor(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if err := store.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(ctx, nil, 42); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Migrate(ctx); err != nil || cursor() != 42 {
+		t.Fatalf("same classifier keeps the cursor: %d %v", cursor(), err)
+	}
+	exec(t, db, "UPDATE support_meta SET v='1' WHERE k='classifier'")
+	if err := store.Migrate(ctx); err != nil || cursor() != 0 {
+		t.Fatalf("an older classifier restarts the ingest: %d %v", cursor(), err)
+	}
+}

@@ -37,7 +37,40 @@ func (s *Store) Migrate(ctx context.Context) error {
 			}
 		}
 	}
-	return nil
+	cols, err := columns(ctx, s.DB, "support_calls")
+	if err != nil {
+		return err
+	}
+	if !cols["quality_side"] {
+		if _, err = s.DB.ExecContext(ctx, "ALTER TABLE support_calls ADD COLUMN quality_side VARCHAR(8) NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+	}
+	return s.reclassify(ctx)
+}
+
+// ClassifierVersion changes whenever Classify derives something new from the
+// same rows; calls stored by an older version are classified again.
+const ClassifierVersion = "2" // 2: quality from the right CDR row, with its side
+
+// reclassify restarts the ingest from the beginning once per classifier
+// version (Save replaces each call as it is read again).
+func (s *Store) reclassify(ctx context.Context) error {
+	var v string
+	err := s.DB.QueryRowContext(ctx, "SELECT v FROM support_meta WHERE k='classifier'").Scan(&v)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if v == ClassifierVersion {
+		return nil
+	}
+	for _, q := range []string{"DELETE FROM support_ingest", "DELETE FROM support_meta WHERE k='classifier'"} {
+		if _, err = s.DB.ExecContext(ctx, q); err != nil {
+			return err
+		}
+	}
+	_, err = s.DB.ExecContext(ctx, "INSERT INTO support_meta (k,v) VALUES ('classifier',?)", ClassifierVersion)
+	return err
 }
 
 // Cursor is the CEL id up to which calls were ingested (0 before the
@@ -95,9 +128,9 @@ func (s *Store) Save(ctx context.Context, calls []Call, cursor int64) error {
 		if _, err = tx.ExecContext(ctx, "DELETE FROM support_calls WHERE linkedid=?", c.LinkedID); err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, "INSERT INTO support_calls (linkedid,started_at,ended_at,kind,grp,outcome,lost_reason,caller,caller_key,agent,trunk,destination,dial_status,announcement_s,ring_s,wait_s,talk_s,setup_s,recorded,quality) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+		if _, err = tx.ExecContext(ctx, "INSERT INTO support_calls (linkedid,started_at,ended_at,kind,grp,outcome,lost_reason,caller,caller_key,agent,trunk,destination,dial_status,announcement_s,ring_s,wait_s,talk_s,setup_s,recorded,quality,quality_side) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 			c.LinkedID, c.Start.UTC(), c.End.UTC(), c.Kind, c.Group, c.Outcome, c.LostReason, c.Caller, CallerKey(c.Caller), c.Agent, c.Trunk, c.Destination, c.DialStatus,
-			nullable(c.Announcement), nullable(c.Ring), nullable(c.CallerWait), nullable(c.Talk), nullable(c.Setup), c.Recorded, c.Quality); err != nil {
+			nullable(c.Announcement), nullable(c.Ring), nullable(c.CallerWait), nullable(c.Talk), nullable(c.Setup), c.Recorded, c.Quality, c.QualitySide); err != nil {
 			return err
 		}
 		if len(c.Legs) > 0 { // one statement per call: a group call has 8-13 legs
@@ -128,7 +161,7 @@ func (s *Store) Period(ctx context.Context, tenant string, from, to time.Time) (
 	if tenant == "" || tenant != s.Tenant {
 		return nil, ErrDenied
 	}
-	rows, err := s.DB.QueryContext(ctx, "SELECT linkedid,started_at,ended_at,kind,grp,outcome,lost_reason,caller,agent,trunk,destination,dial_status,announcement_s,ring_s,wait_s,talk_s,setup_s,recorded,quality FROM support_calls WHERE started_at>=? AND started_at<? ORDER BY started_at,linkedid", from.UTC(), to.UTC())
+	rows, err := s.DB.QueryContext(ctx, "SELECT linkedid,started_at,ended_at,kind,grp,outcome,lost_reason,caller,agent,trunk,destination,dial_status,announcement_s,ring_s,wait_s,talk_s,setup_s,recorded,quality,quality_side FROM support_calls WHERE started_at>=? AND started_at<? ORDER BY started_at,linkedid", from.UTC(), to.UTC())
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +170,7 @@ func (s *Store) Period(ctx context.Context, tenant string, from, to time.Time) (
 	for rows.Next() {
 		var c Call
 		var ann, ring, wait, talk, setup sql.NullInt64
-		if err = rows.Scan(&c.LinkedID, &c.Start, &c.End, &c.Kind, &c.Group, &c.Outcome, &c.LostReason, &c.Caller, &c.Agent, &c.Trunk, &c.Destination, &c.DialStatus, &ann, &ring, &wait, &talk, &setup, &c.Recorded, &c.Quality); err != nil {
+		if err = rows.Scan(&c.LinkedID, &c.Start, &c.End, &c.Kind, &c.Group, &c.Outcome, &c.LostReason, &c.Caller, &c.Agent, &c.Trunk, &c.Destination, &c.DialStatus, &ann, &ring, &wait, &talk, &setup, &c.Recorded, &c.Quality, &c.QualitySide); err != nil {
 			rows.Close()
 			return nil, err
 		}
