@@ -12,6 +12,7 @@ import (
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/exporter"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/httpapi"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/pbx"
+	"github.com/go-tangra/go-tangra-asterisk/v4/internal/presence"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/recordings"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/registration"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/stats"
@@ -45,6 +46,7 @@ type App struct {
 	Checker       httpapi.Checker
 	Listener      *ami.Listener
 	Registry      *calls.Registry
+	Board         *presence.Board
 	Log           *slog.Logger
 	registration  atomic.Pointer[registration.Repository]
 	recordings    atomic.Pointer[recordings.Handler]
@@ -64,7 +66,7 @@ func Build(ctx context.Context, c config.Config, o Options) (a *App, err error) 
 	if err = c.Validate(); err != nil {
 		return nil, err
 	}
-	a = &App{Cfg: c, Log: slog.New(slog.NewJSONHandler(os.Stderr, nil)), Registry: calls.New(), streamStop: make(chan struct{})}
+	a = &App{Cfg: c, Log: slog.New(slog.NewJSONHandler(os.Stderr, nil)), Registry: calls.New(), Board: presence.New(), streamStop: make(chan struct{})}
 	built := a
 	defer func() {
 		if err != nil {
@@ -157,7 +159,7 @@ func Build(ctx context.Context, c config.Config, o Options) (a *App, err error) 
 		}
 	}
 	remote, _ := ui.Remote()
-	a.HTTP, err = httpapi.New(httpapi.Deps{Log: a.Log, Tenant: c.Binding.TenantID, Timezone: location.String(), Verifier: a.Verifier, Checker: a.Checker, History: repo, Reports: reports, Registry: a.Registry, Registration: a.registration.Load, Recordings: a.recordings.Load, Dashboard: metrics, AMIEnabled: c.AMI.On(), StreamLifetime: time.Duration(c.StreamSeconds) * time.Second, Ready: a.ready, Remote: remote, Stop: a.streamStop, RegistrationFresh: func() bool { return a.Listener != nil && a.Listener.RegistrationFresh.Load() }, Support: func() httpapi.Support {
+	a.HTTP, err = httpapi.New(httpapi.Deps{Log: a.Log, Tenant: c.Binding.TenantID, Timezone: location.String(), Verifier: a.Verifier, Checker: a.Checker, History: repo, Reports: reports, Registry: a.Registry, Board: a.Board, Registration: a.registration.Load, Recordings: a.recordings.Load, Dashboard: metrics, AMIEnabled: c.AMI.On(), StreamLifetime: time.Duration(c.StreamSeconds) * time.Second, Ready: a.ready, Remote: remote, Stop: a.streamStop, RegistrationFresh: func() bool { return a.Listener != nil && a.Listener.RegistrationFresh.Load() }, Support: func() httpapi.Support {
 		if v := a.support.Load(); v != nil {
 			return v
 		}
@@ -177,7 +179,7 @@ func Build(ctx context.Context, c config.Config, o Options) (a *App, err error) 
 		return nil, err
 	}
 	if c.AMI.On() {
-		a.Listener = &ami.Listener{Config: c.AMI, Registry: a.Registry, OnError: func(err error) { a.Log.Warn("AMI observation interrupted; retrying", "error", err) }, OnContact: collector.Contact, OnFrame: collector.Frame, OnSweep: collector.BeginSweep}
+		a.Listener = &ami.Listener{Config: c.AMI, Registry: a.Registry, OnError: func(err error) { a.Log.Warn("AMI observation interrupted; retrying", "error", err) }, OnContact: collector.Contact, OnFrame: func(m map[string]string) { collector.Frame(m); a.Board.Frame(m) }, OnSweep: collector.BeginSweep}
 		a.Listener.Store.Store(a.registration.Load())
 	}
 	if err = a.buildAdmin(); err != nil {

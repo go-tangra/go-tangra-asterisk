@@ -10,6 +10,7 @@ import (
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/calls"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/cdr"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/dashboard"
+	"github.com/go-tangra/go-tangra-asterisk/v4/internal/presence"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/recordings"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/registration"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/stats"
@@ -58,6 +59,7 @@ type Deps struct {
 	Capabilities      func(context.Context) map[string]Capability
 	RegistrationFresh func() bool
 	Support           func() Support
+	Board             *presence.Board
 	Remote            fs.FS
 	Stop              <-chan struct{}
 	// Log receives why operator requests are refused (nil: not logged).
@@ -88,7 +90,7 @@ func New(d Deps) (*Server, error) {
 	if e != nil {
 		return nil, e
 	}
-	handlers := map[string]http.HandlerFunc{"/capabilities": s.capabilities, "/calls": s.calls, "/calls/{linkedid}": s.callDetail, "/stats/overview": s.overview, "/stats/extensions": s.extensions, "/stats/extensions/{extension}": s.extension, "/stats/ringgroups/{ring_group}": s.ringgroup, "/directory/extensions": s.directory, "/registration/status/{extension}": s.registrationStatus, "/registration/events": s.registrationEvents, "/registration/online": s.registrationOnline, "/registration/timeline/{extension}": s.registrationTimeline, "/live/calls": s.liveSnapshot, "/live/calls/stream": s.liveStream, "/recordings/{linkedid}": s.recording, "/dashboard/query": s.query, "/dashboard/query_range": s.queryRange, "/support/summary": s.supportSummary, "/support/agents": s.supportAgents, "/support/lost": s.supportLost}
+	handlers := map[string]http.HandlerFunc{"/capabilities": s.capabilities, "/calls": s.calls, "/calls/{linkedid}": s.callDetail, "/stats/overview": s.overview, "/stats/extensions": s.extensions, "/stats/extensions/{extension}": s.extension, "/stats/ringgroups/{ring_group}": s.ringgroup, "/directory/extensions": s.directory, "/registration/status/{extension}": s.registrationStatus, "/registration/events": s.registrationEvents, "/registration/online": s.registrationOnline, "/registration/timeline/{extension}": s.registrationTimeline, "/live/calls": s.liveSnapshot, "/live/board": s.liveBoard, "/live/calls/stream": s.liveStream, "/recordings/{linkedid}": s.recording, "/dashboard/query": s.query, "/dashboard/query_range": s.queryRange, "/support/summary": s.supportSummary, "/support/agents": s.supportAgents, "/support/lost": s.supportLost}
 	for _, route := range man.Routes {
 		short := strings.TrimPrefix(route.Path, asteriskmanifest.APIPrefix)
 		h, ok := handlers[short]

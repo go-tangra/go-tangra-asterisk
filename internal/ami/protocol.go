@@ -59,7 +59,7 @@ func (f *FrameReader) Next() (map[string]string, error) {
 	}
 }
 func WriteAction(w io.Writer, action string, fields map[string]string) error {
-	allowed := map[string]bool{"Login": true, "Logoff": true, "Events": true, "PJSIPShowContacts": true, "CoreShowChannels": true, "Ping": true, "CoreSettings": true, "CoreStatus": true, "PJSIPShowEndpoints": true, "SIPpeers": true, "QueueStatus": true}
+	allowed := map[string]bool{"Login": true, "Logoff": true, "Events": true, "PJSIPShowContacts": true, "CoreShowChannels": true, "Ping": true, "CoreSettings": true, "CoreStatus": true, "PJSIPShowEndpoints": true, "SIPpeers": true, "QueueStatus": true, "DeviceStateList": true}
 	if !allowed[action] {
 		return errors.New("AMI control action denied")
 	}

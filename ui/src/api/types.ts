@@ -26,3 +26,6 @@ export type SupportSummary = components['schemas']['SupportSummary']
 export type SupportAgent = components['schemas']['SupportAgent'] & Record<string, unknown>
 export type SupportLost = components['schemas']['SupportLost'] & Record<string, unknown>
 export type SupportSpread = components['schemas']['SupportSpread']
+export type LiveBoard = components['schemas']['LiveBoard']
+export type LiveAgent = components['schemas']['LiveAgent']
+export type LiveWaiting = components['schemas']['LiveWaiting']
