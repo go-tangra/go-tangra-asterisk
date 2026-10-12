@@ -1,0 +1,2 @@
+linkedid	uniqueid	sequence	calldate	channel	dstchannel	src	dst	dcontext	lastapp	lastdata	disposition	duration	billsec	rtpqos	peerrtpqos	recorded
+1767600000.700	1767600000.700	103406	2026-01-08 09:08:41	PJSIP/ITD-0000e9fb		n00000001	s	ext-fax	ReceiveFAX	/var/spool/asterisk/fax/#.#.tif,f	ANSWERED	18	18	ssrc=1308828876;themssrc=444764189;lp=0;rxjitter=0.000000;rxcount=915;txjitter=0.001500;txcount=914;rlp=0;rtt=0.004425;rxmes=88.046981;txmes=88.047996		0

@@ -1,0 +1,8 @@
+{
+ "kind": "outbound",
+ "agent": "48",
+ "trunk": "ITD",
+ "outcome": "not-connected",
+ "dialStatus": "CANCEL",
+ "setupSeconds": 21
+}

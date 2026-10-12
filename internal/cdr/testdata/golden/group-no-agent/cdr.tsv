@@ -1,0 +1,2 @@
+linkedid	uniqueid	sequence	calldate	channel	dstchannel	src	dst	dcontext	lastapp	lastdata	disposition	duration	billsec	rtpqos	peerrtpqos	recorded
+1767600000.200	1767600000.200	104599	2026-01-08 13:00:44	PJSIP/ITD-0000eca5		n00000001	n00000002	app-blackhole	Hangup		ANSWERED	18	17			1

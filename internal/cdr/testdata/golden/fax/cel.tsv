@@ -1,0 +1,6 @@
+id	eventtype	eventtime	cid_num	cid_ani	cid_dnid	exten	context	channame	appname	appdata	uniqueid	linkedid	peer	extra
+1	CHAN_START	2026-01-08 09:08:41	n00000001			n00000002	from-pstn	PJSIP/ITD-0000e9fb			1767600000.700	1767600000.700		
+2	ANSWER	2026-01-08 09:08:41	n00000001	n00000001	n00000002	s	ext-fax	PJSIP/ITD-0000e9fb	ReceiveFAX	/var/spool/asterisk/fax/#.#.tif,f	1767600000.700	1767600000.700		
+3	HANGUP	2026-01-08 09:08:59	n00000001	n00000001	n00000002	s	macro-hangupcall	PJSIP/ITD-0000e9fb			1767600000.700	1767600000.700		"{""hangupcause"":16,""hangupsource"":""PJSIP/ITD-0000e9fb"",""dialstatus"":""""}"
+4	CHAN_END	2026-01-08 09:08:59	n00000001	n00000001	n00000002	s	macro-hangupcall	PJSIP/ITD-0000e9fb			1767600000.700	1767600000.700		
+5	LINKEDID_END	2026-01-08 09:08:59	n00000001	n00000001	n00000002	s	macro-hangupcall	PJSIP/ITD-0000e9fb			1767600000.700	1767600000.700		

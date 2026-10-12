@@ -1,0 +1,17 @@
+{
+ "kind": "inbound-group",
+ "group": "600",
+ "outcome": "lost",
+ "lostReason": "caller-hung-up-while-ringing",
+ "announcementSeconds": 18,
+ "ringSeconds": 76,
+ "callerWaitSeconds": 94,
+ "legs": {
+  "41": "declined",
+  "35": "declined",
+  "30": "declined",
+  "40": "caller-hung-up",
+  "18": "caller-hung-up",
+  "54": "caller-hung-up"
+ }
+}

@@ -1,0 +1,5 @@
+id	eventtype	eventtime	cid_num	cid_ani	cid_dnid	exten	context	channame	appname	appdata	uniqueid	linkedid	peer	extra
+1	CHAN_START	2026-01-08 10:05:00	36			n00000001	from-internal	PJSIP/36-0000eaa7			1767600000.600	1767600000.600		
+2	HANGUP	2026-01-08 10:05:07	36	36	n00000001	s	macro-hangupcall	PJSIP/36-0000eaa7			1767600000.600	1767600000.600		"{""hangupcause"":127,""hangupsource"":""PJSIP/36-0000eaa7"",""dialstatus"":""""}"
+3	CHAN_END	2026-01-08 10:05:07	36	36	n00000001	s	macro-hangupcall	PJSIP/36-0000eaa7			1767600000.600	1767600000.600		
+4	LINKEDID_END	2026-01-08 10:05:07	36	36	n00000001	s	macro-hangupcall	PJSIP/36-0000eaa7			1767600000.600	1767600000.600		

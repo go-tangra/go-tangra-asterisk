@@ -1,0 +1,8 @@
+{
+ "kind": "outbound",
+ "agent": "45",
+ "trunk": "ITD",
+ "outcome": "connected",
+ "setupSeconds": 5,
+ "talkSeconds": 26
+}

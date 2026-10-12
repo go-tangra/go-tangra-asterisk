@@ -1,0 +1,52 @@
+id	eventtype	eventtime	cid_num	cid_ani	cid_dnid	exten	context	channame	appname	appdata	uniqueid	linkedid	peer	extra
+1	CHAN_START	2026-01-08 08:46:01	n00000001			n00000002	from-pstn	PJSIP/ITD-0000e9c4			1767600000.0	1767600000.0		
+2	ANSWER	2026-01-08 08:46:01	n00000001	n00000001	n00000002	s	app-announcement-1	PJSIP/ITD-0000e9c4	Answer		1767600000.0	1767600000.0		
+3	APP_START	2026-01-08 08:46:19	n00000001	n00000001	n00000002	n00000003	sub-record-check	PJSIP/ITD-0000e9c4	MixMonitor	2026/01/08/rg-600-#-#-#-#.#.wav,abi(#-#-#.#),	1767600000.0	1767600000.0		
+4	APP_END	2026-01-08 08:46:19	n00000001	n00000001	n00000002	n00000003	sub-record-check	PJSIP/ITD-0000e9c4	MixMonitor	2026/01/08/rg-600-#-#-#-#.#.wav,abi(#-#-#.#),	1767600000.0	1767600000.0		
+5	CHAN_START	2026-01-08 08:46:19	22			s	from-internal	PJSIP/22-0000e9c5			1767600000.1	1767600000.0		
+6	CHAN_START	2026-01-08 08:46:19	30			s	from-internal	PJSIP/30-0000e9c6			1767600000.2	1767600000.0		
+7	CHAN_START	2026-01-08 08:46:19	35			s	from-internal	PJSIP/35-0000e9c7			1767600000.3	1767600000.0		
+8	CHAN_START	2026-01-08 08:46:19	36			s	from-internal	PJSIP/36-0000e9c8			1767600000.4	1767600000.0		
+9	CHAN_START	2026-01-08 08:46:19	40			s	from-internal	PJSIP/40-0000e9c9			1767600000.5	1767600000.0		
+10	CHAN_START	2026-01-08 08:46:19	41			s	from-internal	PJSIP/41-0000e9ca			1767600000.6	1767600000.0		
+11	CHAN_START	2026-01-08 08:46:19	18			s	from-internal	PJSIP/18-0000e9cb			1767600000.7	1767600000.0		
+12	CHAN_START	2026-01-08 08:46:19	45			s	from-internal	PJSIP/45-0000e9cc			1767600000.8	1767600000.0		
+13	CHAN_START	2026-01-08 08:46:19	48			s	from-internal	PJSIP/48-0000e9cd			1767600000.9	1767600000.0		
+14	CHAN_START	2026-01-08 08:46:19	49			s	from-internal	PJSIP/49-0000e9ce			1767600000.10	1767600000.0		
+15	CHAN_START	2026-01-08 08:46:19	51			s	from-internal	PJSIP/51-0000e9cf			1767600000.11	1767600000.0		
+16	CHAN_START	2026-01-08 08:46:19	54			s	from-internal	PJSIP/54-0000e9d0			1767600000.12	1767600000.0		
+17	CHAN_START	2026-01-08 08:46:19	55			s	from-internal	PJSIP/55-0000e9d1			1767600000.13	1767600000.0		
+18	HANGUP	2026-01-08 08:46:22	41	41		600	from-internal	PJSIP/41-0000e9ca	AppDial	(Outgoing Line)	1767600000.6	1767600000.0		"{""hangupcause"":17,""hangupsource"":""PJSIP/41-0000e9ca"",""dialstatus"":""""}"
+19	CHAN_END	2026-01-08 08:46:22	41	41		600	from-internal	PJSIP/41-0000e9ca	AppDial	(Outgoing Line)	1767600000.6	1767600000.0		
+20	ANSWER	2026-01-08 08:46:42	49	49		600	from-internal	PJSIP/49-0000e9ce	AppDial	(Outgoing Line)	1767600000.10	1767600000.0		
+21	HANGUP	2026-01-08 08:46:42	22	22		600	from-internal	PJSIP/22-0000e9c5	AppDial	(Outgoing Line)	1767600000.1	1767600000.0		"{""hangupcause"":19,""hangupsource"":"""",""dialstatus"":""""}"
+22	CHAN_END	2026-01-08 08:46:42	22	22		600	from-internal	PJSIP/22-0000e9c5	AppDial	(Outgoing Line)	1767600000.1	1767600000.0		
+23	HANGUP	2026-01-08 08:46:42	30	30		600	from-internal	PJSIP/30-0000e9c6	AppDial	(Outgoing Line)	1767600000.2	1767600000.0		"{""hangupcause"":19,""hangupsource"":"""",""dialstatus"":""""}"
+24	CHAN_END	2026-01-08 08:46:42	30	30		600	from-internal	PJSIP/30-0000e9c6	AppDial	(Outgoing Line)	1767600000.2	1767600000.0		
+25	HANGUP	2026-01-08 08:46:42	35	35		600	from-internal	PJSIP/35-0000e9c7	AppDial	(Outgoing Line)	1767600000.3	1767600000.0		"{""hangupcause"":19,""hangupsource"":"""",""dialstatus"":""""}"
+26	CHAN_END	2026-01-08 08:46:42	35	35		600	from-internal	PJSIP/35-0000e9c7	AppDial	(Outgoing Line)	1767600000.3	1767600000.0		
+27	HANGUP	2026-01-08 08:46:42	36	36		600	from-internal	PJSIP/36-0000e9c8	AppDial	(Outgoing Line)	1767600000.4	1767600000.0		"{""hangupcause"":19,""hangupsource"":"""",""dialstatus"":""""}"
+28	CHAN_END	2026-01-08 08:46:42	36	36		600	from-internal	PJSIP/36-0000e9c8	AppDial	(Outgoing Line)	1767600000.4	1767600000.0		
+29	HANGUP	2026-01-08 08:46:43	40	40		600	from-internal	PJSIP/40-0000e9c9	AppDial	(Outgoing Line)	1767600000.5	1767600000.0		"{""hangupcause"":19,""hangupsource"":"""",""dialstatus"":""""}"
+30	CHAN_END	2026-01-08 08:46:43	40	40		600	from-internal	PJSIP/40-0000e9c9	AppDial	(Outgoing Line)	1767600000.5	1767600000.0		
+31	HANGUP	2026-01-08 08:46:43	18	18		600	from-internal	PJSIP/18-0000e9cb	AppDial	(Outgoing Line)	1767600000.7	1767600000.0		"{""hangupcause"":19,""hangupsource"":"""",""dialstatus"":""""}"
+32	CHAN_END	2026-01-08 08:46:43	18	18		600	from-internal	PJSIP/18-0000e9cb	AppDial	(Outgoing Line)	1767600000.7	1767600000.0		
+33	HANGUP	2026-01-08 08:46:43	45	45		600	from-internal	PJSIP/45-0000e9cc	AppDial	(Outgoing Line)	1767600000.8	1767600000.0		"{""hangupcause"":19,""hangupsource"":"""",""dialstatus"":""""}"
+34	CHAN_END	2026-01-08 08:46:43	45	45		600	from-internal	PJSIP/45-0000e9cc	AppDial	(Outgoing Line)	1767600000.8	1767600000.0		
+35	HANGUP	2026-01-08 08:46:43	48	48		600	from-internal	PJSIP/48-0000e9cd	AppDial	(Outgoing Line)	1767600000.9	1767600000.0		"{""hangupcause"":19,""hangupsource"":"""",""dialstatus"":""""}"
+36	CHAN_END	2026-01-08 08:46:43	48	48		600	from-internal	PJSIP/48-0000e9cd	AppDial	(Outgoing Line)	1767600000.9	1767600000.0		
+37	HANGUP	2026-01-08 08:46:43	51	51		600	from-internal	PJSIP/51-0000e9cf	AppDial	(Outgoing Line)	1767600000.11	1767600000.0		"{""hangupcause"":19,""hangupsource"":"""",""dialstatus"":""""}"
+38	CHAN_END	2026-01-08 08:46:43	51	51		600	from-internal	PJSIP/51-0000e9cf	AppDial	(Outgoing Line)	1767600000.11	1767600000.0		
+39	HANGUP	2026-01-08 08:46:43	54	54		600	from-internal	PJSIP/54-0000e9d0	AppDial	(Outgoing Line)	1767600000.12	1767600000.0		"{""hangupcause"":19,""hangupsource"":"""",""dialstatus"":""""}"
+40	CHAN_END	2026-01-08 08:46:43	54	54		600	from-internal	PJSIP/54-0000e9d0	AppDial	(Outgoing Line)	1767600000.12	1767600000.0		
+41	HANGUP	2026-01-08 08:46:43	55	55		600	from-internal	PJSIP/55-0000e9d1	AppDial	(Outgoing Line)	1767600000.13	1767600000.0		"{""hangupcause"":19,""hangupsource"":"""",""dialstatus"":""""}"
+42	CHAN_END	2026-01-08 08:46:43	55	55		600	from-internal	PJSIP/55-0000e9d1	AppDial	(Outgoing Line)	1767600000.13	1767600000.0		
+43	BRIDGE_ENTER	2026-01-08 08:46:43	49	49			from-internal	PJSIP/49-0000e9ce	AppDial	(Outgoing Line)	1767600000.10	1767600000.0		"{""bridge_id"":""98101cca-4710-4abb-b1c9-5b874cfcee43"",""bridge_technology"":""simple_bridge""}"
+44	BRIDGE_ENTER	2026-01-08 08:46:43	n00000001	n00000001	n00000002	600	dial-with-exten	PJSIP/ITD-0000e9c4	Dial	PJSIP/22/sip:22@pbx;rinstance=x&PJSIP/30/sip:30@pbx;rinstance=x#bc87dbf&PJSIP/35/sip:35@pbx;transport=TCP;rinstance=x&PJSIP/36/sip:36@pbx;rinstance=x&PJSIP/40/sip:40@pbx;rinstance=x&PJSIP/41/sip:41@pbx;transport=TCP;rinstance=x&PJSIP/18/sip:18@pbx;rinstance=x&PJSIP/45/sip:45@pbx;rinstance=#cc647&PJSIP/48/sip:48@pbx;rinstance=x&PJSIP/49/sip:49@pbx;transport=TCP;rinstance=x&PJSIP/51/sip:51@pbx;rinstance=x&PJSIP/54/sip:54@pbx;rinstance=x&PJSIP/55/sip:55@pbx;rinstance=x#,300,HhtrQ(NO_ANSWER)U(macro-auto-blkvm)b(func-apply-sipheaders^s^1),	1767600000.0	1767600000.0	PJSIP/49-0000e9ce	"{""bridge_id"":""98101cca-4710-4abb-b1c9-5b874cfcee43"",""bridge_technology"":""simple_bridge""}"
+45	BRIDGE_EXIT	2026-01-08 08:47:55	n00000001	n00000001	n00000002	600	dial-with-exten	PJSIP/ITD-0000e9c4	Dial	PJSIP/22/sip:22@pbx;rinstance=x&PJSIP/30/sip:30@pbx;rinstance=x#bc87dbf&PJSIP/35/sip:35@pbx;transport=TCP;rinstance=x&PJSIP/36/sip:36@pbx;rinstance=x&PJSIP/40/sip:40@pbx;rinstance=x&PJSIP/41/sip:41@pbx;transport=TCP;rinstance=x&PJSIP/18/sip:18@pbx;rinstance=x&PJSIP/45/sip:45@pbx;rinstance=#cc647&PJSIP/48/sip:48@pbx;rinstance=x&PJSIP/49/sip:49@pbx;transport=TCP;rinstance=x&PJSIP/51/sip:51@pbx;rinstance=x&PJSIP/54/sip:54@pbx;rinstance=x&PJSIP/55/sip:55@pbx;rinstance=x#,300,HhtrQ(NO_ANSWER)U(macro-auto-blkvm)b(func-apply-sipheaders^s^1),	1767600000.0	1767600000.0	PJSIP/49-0000e9ce	"{""bridge_id"":""98101cca-4710-4abb-b1c9-5b874cfcee43"",""bridge_technology"":""simple_bridge""}"
+46	BRIDGE_EXIT	2026-01-08 08:47:55	49	49			from-internal	PJSIP/49-0000e9ce	AppDial	(Outgoing Line)	1767600000.10	1767600000.0		"{""bridge_id"":""98101cca-4710-4abb-b1c9-5b874cfcee43"",""bridge_technology"":""simple_bridge""}"
+47	HANGUP	2026-01-08 08:47:56	49	49			from-internal	PJSIP/49-0000e9ce	AppDial	(Outgoing Line)	1767600000.10	1767600000.0		"{""hangupcause"":16,""hangupsource"":""PJSIP/ITD-0000e9c4"",""dialstatus"":""""}"
+48	CHAN_END	2026-01-08 08:47:56	49	49			from-internal	PJSIP/49-0000e9ce	AppDial	(Outgoing Line)	1767600000.10	1767600000.0		
+49	HANGUP	2026-01-08 08:47:56	n00000001	n00000001	n00000002	s	macro-hangupcall	PJSIP/ITD-0000e9c4			1767600000.0	1767600000.0		"{""hangupcause"":16,""hangupsource"":""PJSIP/ITD-0000e9c4"",""dialstatus"":""ANSWER""}"
+50	CHAN_END	2026-01-08 08:47:56	n00000001	n00000001	n00000002	s	macro-hangupcall	PJSIP/ITD-0000e9c4			1767600000.0	1767600000.0		
+51	LINKEDID_END	2026-01-08 08:47:56	n00000001	n00000001	n00000002	s	macro-hangupcall	PJSIP/ITD-0000e9c4			1767600000.0	1767600000.0		
