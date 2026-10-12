@@ -34,5 +34,8 @@ binding:
 # AMI is on when an address is given.
 ami: { address: "${ASTERISK_AMI_ADDRESS}", username: "${ASTERISK_AMI_USERNAME}", secret: "${ASTERISK_AMI_SECRET}" }
 gateway: { service: gateway, issuer: ${GATEWAY_ISSUER} }
+# Support-team reports (need registration_dsn). Name the support ring
+# groups and the extensions that are not support staff:
+# support: { groups: ["600"], exclude: ["201-211"], callback_minutes: 120 }
 query_timeout_seconds: 5
 stream_seconds: 240

@@ -23,6 +23,18 @@ The service obtains its mesh SPIFFE SVID by enrolling with lcm over the network 
 
 Grant only SELECT on PBX CDR/CEL and configuration schemas. The service runs no PBX migrations or control actions. The history source is required; CEL, RTP columns and directory names are probed and optional. Mount recordings read-only. Use a dedicated Prometheus upstream for the configured PBX/tenant, set `monitoring_dedicated: true`, and isolate its scrape targets. This setting is an operator assertion of dedicated storage, not an automatic partitioning mechanism.
 
+Support-team reports (`/support/*`, [definitions](docs/support-metrics.md)) are built from finished calls: a background worker follows the CEL table (`LINKEDID_END`), classifies each call (ring-group answered or lost, per-agent declined / colleague answered, outbound connected, …) and stores the result in the module-owned database next to the registration history. The first run backfills everything CDR/CEL still hold, 500 calls at a time. The team is the members of the support ring groups, read from the FreePBX configuration database:
+
+```yaml
+support:
+  groups: ["600"]        # support ring groups (default: every ring group)
+  exclude: ["201-211"]   # extensions or ranges that are not support staff
+  callback_minutes: 120  # a lost call counts as called back within this
+  # enabled: false       # turn the reports off
+```
+
+To rebuild every call after a rule change, delete the cursor row (`DELETE FROM support_ingest` in the module-owned database); the next run re-classifies the history.
+
 Registration uses a **separate module-owned** MySQL database. Only changes are stored: the minute-by-minute contact snapshot writes a row when a contact's status, AOR, user agent or address changes, or shortly before its stored expiry lapses (so a continuously registered phone never appears expired). Events older than `registration_retention_days` (default 400, `0` keeps them forever) are pruned hourly. Bootstrap is explicit:
 
 ```sh

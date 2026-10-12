@@ -1727,6 +1727,302 @@
           }
         ]
       }
+    },
+    "/api/asterisk/support/summary": {
+      "get": {
+        "operationId": "support__summary",
+        "x-freya-permission": "stats:read",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportSummary"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": true
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": true
+          }
+        ]
+      }
+    },
+    "/api/asterisk/support/agents": {
+      "get": {
+        "operationId": "support__agents",
+        "x-freya-permission": "stats:read",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportAgents"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": true
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": true
+          }
+        ]
+      }
+    },
+    "/api/asterisk/support/lost": {
+      "get": {
+        "operationId": "support__lost",
+        "x-freya-permission": "stats:read",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportLostPage"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": true
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -2754,6 +3050,315 @@
           },
           "order": {
             "type": "string"
+          }
+        }
+      },
+      "SupportSpread": {
+        "type": "object",
+        "required": [
+          "count",
+          "median",
+          "p90"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "median": {
+            "type": "number",
+            "nullable": true
+          },
+          "p90": {
+            "type": "number",
+            "nullable": true
+          }
+        }
+      },
+      "SupportSummary": {
+        "type": "object",
+        "required": [
+          "timezone",
+          "team",
+          "ingestedAt",
+          "inbound",
+          "outbound"
+        ],
+        "properties": {
+          "timezone": {
+            "type": "string"
+          },
+          "team": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ingestedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "inbound": {
+            "type": "object",
+            "required": [
+              "calls",
+              "answered",
+              "abandonedBeforeGroup",
+              "lost",
+              "lostByReason",
+              "calledBack",
+              "waitSeconds",
+              "announcementSeconds",
+              "talkSeconds",
+              "directCalls",
+              "directAnswered"
+            ],
+            "properties": {
+              "calls": {
+                "type": "integer"
+              },
+              "answered": {
+                "type": "integer"
+              },
+              "abandonedBeforeGroup": {
+                "type": "integer"
+              },
+              "lost": {
+                "type": "integer"
+              },
+              "lostByReason": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              },
+              "calledBack": {
+                "type": "integer"
+              },
+              "waitSeconds": {
+                "$ref": "#/components/schemas/SupportSpread"
+              },
+              "announcementSeconds": {
+                "$ref": "#/components/schemas/SupportSpread"
+              },
+              "talkSeconds": {
+                "type": "integer"
+              },
+              "directCalls": {
+                "type": "integer"
+              },
+              "directAnswered": {
+                "type": "integer"
+              }
+            }
+          },
+          "outbound": {
+            "type": "object",
+            "required": [
+              "attempts",
+              "connected",
+              "talkSeconds"
+            ],
+            "properties": {
+              "attempts": {
+                "type": "integer"
+              },
+              "connected": {
+                "type": "integer"
+              },
+              "talkSeconds": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "SupportAgent": {
+        "type": "object",
+        "required": [
+          "extension",
+          "name",
+          "member",
+          "inbound",
+          "outbound"
+        ],
+        "properties": {
+          "extension": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "member": {
+            "type": "boolean"
+          },
+          "inbound": {
+            "type": "object",
+            "required": [
+              "offered",
+              "answered",
+              "declined",
+              "colleagueAnswered",
+              "rangWhileLost",
+              "answerShare",
+              "timeToAnswerSeconds",
+              "talkSeconds",
+              "directAnswered",
+              "directTalkSeconds"
+            ],
+            "properties": {
+              "offered": {
+                "type": "integer"
+              },
+              "answered": {
+                "type": "integer"
+              },
+              "declined": {
+                "type": "integer"
+              },
+              "colleagueAnswered": {
+                "type": "integer"
+              },
+              "rangWhileLost": {
+                "type": "integer"
+              },
+              "answerShare": {
+                "type": "number"
+              },
+              "timeToAnswerSeconds": {
+                "$ref": "#/components/schemas/SupportSpread"
+              },
+              "talkSeconds": {
+                "type": "integer"
+              },
+              "directAnswered": {
+                "type": "integer"
+              },
+              "directTalkSeconds": {
+                "type": "integer"
+              }
+            }
+          },
+          "outbound": {
+            "type": "object",
+            "required": [
+              "attempts",
+              "connected",
+              "talkSeconds",
+              "callbacks"
+            ],
+            "properties": {
+              "attempts": {
+                "type": "integer"
+              },
+              "connected": {
+                "type": "integer"
+              },
+              "talkSeconds": {
+                "type": "integer"
+              },
+              "callbacks": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "SupportAgents": {
+        "type": "object",
+        "required": [
+          "timezone",
+          "items"
+        ],
+        "properties": {
+          "timezone": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupportAgent"
+            }
+          }
+        }
+      },
+      "SupportLost": {
+        "type": "object",
+        "required": [
+          "linkedid",
+          "start",
+          "caller",
+          "reason",
+          "outcome",
+          "waitSeconds",
+          "rang",
+          "callbackAt",
+          "callbackBy"
+        ],
+        "properties": {
+          "linkedid": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "caller": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "lost",
+              "abandoned-before-group"
+            ]
+          },
+          "waitSeconds": {
+            "type": "integer",
+            "nullable": true
+          },
+          "rang": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "callbackAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "callbackBy": {
+            "type": "string"
+          }
+        }
+      },
+      "SupportLostPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupportLost"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "page_size": {
+            "type": "integer"
           }
         }
       }

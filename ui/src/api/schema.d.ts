@@ -276,6 +276,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/asterisk/support/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["support__summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/asterisk/support/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["support__agents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/asterisk/support/lost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["support__lost"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -539,6 +587,84 @@ export interface components {
             page_size: number;
             sort: string;
             order: string;
+        };
+        SupportSpread: {
+            count: number;
+            median: number | null;
+            p90: number | null;
+        };
+        SupportSummary: {
+            timezone: string;
+            team: string[];
+            /** Format: date-time */
+            ingestedAt: string | null;
+            inbound: {
+                calls: number;
+                answered: number;
+                abandonedBeforeGroup: number;
+                lost: number;
+                lostByReason: {
+                    [key: string]: number;
+                };
+                calledBack: number;
+                waitSeconds: components["schemas"]["SupportSpread"];
+                announcementSeconds: components["schemas"]["SupportSpread"];
+                talkSeconds: number;
+                directCalls: number;
+                directAnswered: number;
+            };
+            outbound: {
+                attempts: number;
+                connected: number;
+                talkSeconds: number;
+            };
+        };
+        SupportAgent: {
+            extension: string;
+            name: string;
+            member: boolean;
+            inbound: {
+                offered: number;
+                answered: number;
+                declined: number;
+                colleagueAnswered: number;
+                rangWhileLost: number;
+                answerShare: number;
+                timeToAnswerSeconds: components["schemas"]["SupportSpread"];
+                talkSeconds: number;
+                directAnswered: number;
+                directTalkSeconds: number;
+            };
+            outbound: {
+                attempts: number;
+                connected: number;
+                talkSeconds: number;
+                callbacks: number;
+            };
+        };
+        SupportAgents: {
+            timezone: string;
+            items: components["schemas"]["SupportAgent"][];
+        };
+        SupportLost: {
+            linkedid: string;
+            /** Format: date-time */
+            start: string;
+            caller: string;
+            reason: string;
+            /** @enum {string} */
+            outcome: "lost" | "abandoned-before-group";
+            waitSeconds: number | null;
+            rang: string[];
+            /** Format: date-time */
+            callbackAt: string | null;
+            callbackBy: string;
+        };
+        SupportLostPage: {
+            items: components["schemas"]["SupportLost"][];
+            total: number;
+            page: number;
+            page_size: number;
         };
     };
     responses: never;
@@ -1685,6 +1811,212 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MetricResult"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    support__summary: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportSummary"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    support__agents: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportAgents"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    support__lost: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportLostPage"];
                 };
             };
             /** @description Invalid request */
