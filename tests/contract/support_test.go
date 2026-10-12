@@ -22,9 +22,13 @@ func (supportFake) Report(_ context.Context, _ string, from, _ time.Time) ([]sup
 		{LinkedID: "c", Start: from.Add(2*time.Hour + 30*time.Minute), Kind: support.KindOutbound, Outcome: support.OutcomeConnected, Agent: "41", Caller: "+359888123456"},
 	}, nil
 }
-func (supportFake) TeamMembers(context.Context) []string        { return []string{"41", "49"} }
-func (supportFake) CallbackWindow() time.Duration               { return 2 * time.Hour }
-func (supportFake) Ingested(context.Context) (time.Time, error) { return time.Now(), nil }
+func (supportFake) TeamMembers(context.Context) []string                       { return []string{"41", "49"} }
+func (supportFake) CallbackWindow() time.Duration                              { return 2 * time.Hour }
+func (supportFake) Ingested(context.Context) (time.Time, error)                { return time.Now(), nil }
+func (supportFake) RecordListen(context.Context, string, string, string) error { return nil }
+func (supportFake) Listens(context.Context, string, time.Time, time.Time, string) ([]support.Listen, error) {
+	return []support.Listen{{UserID: "u1", LinkedID: "a"}}, nil
+}
 
 func TestSupportRoutes(t *testing.T) {
 	unavailable, e := httpapi.New(httpapi.Deps{Tenant: "t", Verifier: validIdentity{}, Checker: allow{}})
@@ -46,6 +50,12 @@ func TestSupportRoutes(t *testing.T) {
 		{s, "/support/agents" + day, 200},
 		{s, "/support/lost" + day, 200},
 		{s, "/support/lost" + day + "&page_size=201", 400},
+		{s, "/support/calls" + day, 200},
+		{s, "/support/calls" + day + "&type=answered&agent=49&min_talk=60&quality=poor&recorded=true&caller=0888", 200},
+		{s, "/support/calls" + day + "&type=bogus", 400},
+		{s, "/support/calls" + day + "&min_talk=-1", 400},
+		{s, "/support/listens" + day + "&linkedid=a", 200},
+		{unavailable, "/support/listens" + day, 503},
 		{s, "/support/summary?from=2026-01-01T00:00:00Z&to=2026-06-01T00:00:00Z", 400}, // over 92 days
 		{s, "/support/summary?from=2026-10-09T00:00:00Z&to=2026-10-08T00:00:00Z", 400},
 	} {
@@ -62,5 +72,21 @@ func TestSupportRoutes(t *testing.T) {
 	}
 	if json.Unmarshal(w.Body.Bytes(), &lost) != nil || len(lost.Items) != 1 || lost.Items[0].CallbackBy != "41" {
 		t.Fatalf("the lost call was called back by 41 (numbers differ in format only): %s", w.Body)
+	}
+}
+
+func TestSupportCallSearch(t *testing.T) {
+	s, e := httpapi.New(httpapi.Deps{Tenant: "t", Verifier: validIdentity{}, Checker: allow{}, Support: func() httpapi.Support { return supportFake{} }})
+	if e != nil {
+		t.Fatal(e)
+	}
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, httptest.NewRequest("GET", "/api/asterisk/support/calls?from=2026-10-08T00:00:00Z&to=2026-10-09T00:00:00Z&agent=41", nil))
+	var page struct {
+		Items []support.Row `json:"items"`
+		Total int           `json:"total"`
+	}
+	if json.Unmarshal(w.Body.Bytes(), &page) != nil || page.Total != 2 || page.Items[0].LinkedID != "c" || page.Items[1].Type != support.TypeAnswered {
+		t.Fatalf("41 dialled c and declined a: %s", w.Body)
 	}
 }

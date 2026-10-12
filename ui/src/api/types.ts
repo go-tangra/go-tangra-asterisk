@@ -29,3 +29,6 @@ export type SupportSpread = components['schemas']['SupportSpread']
 export type LiveBoard = components['schemas']['LiveBoard']
 export type LiveAgent = components['schemas']['LiveAgent']
 export type LiveWaiting = components['schemas']['LiveWaiting']
+export type SupportCall = components['schemas']['SupportCall'] & Record<string, unknown>
+export type SupportCallPage = components['schemas']['SupportCallPage']
+export type SupportListen = components['schemas']['SupportListen']

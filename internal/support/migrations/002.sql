@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS support_listens (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, listened_at DATETIME(3) NOT NULL, user_id VARCHAR(128) NOT NULL, linkedid VARCHAR(64) NOT NULL, KEY idx_support_listen_time(listened_at), KEY idx_support_listen_call(linkedid,listened_at))
