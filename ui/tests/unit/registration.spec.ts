@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it, vi } from 'vitest'
-import RegistrationTab from '../../src/views/extensions/registration-tab.vue'
+import RegistrationTab from '../../src/views/team/registration-tab.vue'
 const json=(body:unknown)=>({ok:true,status:200,json:async()=>body})
 const events=(n:number)=>Array.from({length:n},(_,i)=>({id:i+1,time:'2026-10-01T10:00:00Z',endpoint:'101',contact:'sip:101@pbx',status:'Created',expire:''}))
 const timeline={extension:'101',from:'2026-10-01T00:00:00Z',to:'2026-10-02T00:00:00Z',gaps:[],segments:[{start:'2026-10-01T00:00:00Z',end:'2026-10-01T06:00:00Z',state:'offline'},{start:'2026-10-01T06:00:00Z',end:'2026-10-02T00:00:00Z',state:'online',contact:'sip:101@10.0.0.5',userAgent:'Yealink T46U'}],summary:{onlineSeconds:64800,offlineSeconds:21600,unknownSeconds:0,dropouts:1,longestOfflineSeconds:21600}}

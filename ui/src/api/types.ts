@@ -6,10 +6,6 @@ export type Capabilities = Record<string,Capability>
 export interface QoS {rxJitterMs:number|null;txJitterMs:number|null;rttMs:number|null;rxLossPercent:number|null;txLossPercent:number|null;rxMos:number|null;txMos:number|null;quality:string}
 export interface Leg {uniqueid:string;start:string;channel:string;dstChannel:string;src:string;dst:string;disposition:string;durationSeconds:number;talkSeconds:number;localQuality?:QoS;peerQuality?:QoS}
 export interface CallDetail {summary:Call;legs:Leg[];timeline:{time:string;type:string;channel:string;uniqueid:string}[];celAvailable:boolean;qualityAvailable:boolean;registration?:{statuses:RegistrationStatus[];gaps:Gap[]}}
-export interface Bucket extends Record<string, unknown> {start:string;total:number;answered:number;missed:number}
-export interface Overview {timezone:string;total:number;answered:number;missed:number;meanTalkSeconds:number;meanPickupSeconds:number|null;series:Bucket[]}
-export interface Extension extends Record<string, unknown> {timezone:string;extension:string;name:string;total:number;inbound:number;outbound:number;answered:number;missed:number;talkSeconds:number;meanTalkSeconds:number;meanPickupSeconds:number|null;workloadShare:number;busiestHour:number;hourOfDay:number[];series:Bucket[]}
-export interface Ringgroup {total:number;answered:number;noAnswer:number;allBusy:number;failed:number;missedCalls:Call[]}
 export interface RegistrationEvent extends Record<string, unknown> {id:number;time:string;endpoint:string;contact:string;status:string;expire:string}
 // Registration history: paged like Page<T>; total/page fields and the
 // truncation flags are optional so older or capped responses still render.

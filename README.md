@@ -1,6 +1,6 @@
 # Tangra V4 Asterisk
 
-A read-only PBX observer for the Tangra V4 portal. It provides logical call history, extension/ringgroup statistics, observed registration history, live-call SSE, confined recording playback, directional RTP diagnostics and dedicated PBX monitoring. One service instance binds one PBX exclusively to one authenticated tenant.
+A read-only PBX observer for the Tangra V4 portal. It tracks how a support team handles its calls: team and per-agent reports (answered, declined, time to answer, talk, lost calls and callbacks), a live board of who is on a call or waiting, a call search with recordings and a listen audit, and call quality by trunk, agent and phone. Underneath are the logical call history, observed registration history, live-call SSE, confined recording playback, directional RTP diagnostics and dedicated PBX monitoring. One service instance binds one PBX exclusively to one authenticated tenant.
 
 ## Build and verification
 
@@ -32,6 +32,8 @@ support:
   callback_minutes: 120  # a lost call counts as called back within this
   # enabled: false       # turn the reports off
 ```
+
+The portal pages are Support team (with a page per agent: their calls, online time and registration history), Live board, Calls (search, recordings, the raw CDR log at `/asterisk/calls/log`), Call quality and Monitoring. Upgrading from an earlier v4 release: see [docs/migration.md](docs/migration.md#within-v4-the-support-reports).
 
 When an upgrade changes the classification rules the module re-classifies the history by itself on start (a short backfill). To force it, delete the cursor row (`DELETE FROM support_ingest` in the module-owned database); the next run re-classifies the history.
 

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/calls"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/cdr"
-	"github.com/go-tangra/go-tangra-asterisk/v4/internal/stats"
 	"os"
 	"runtime"
 	"sort"
@@ -20,8 +19,6 @@ func TestReferencePerformance(t *testing.T) {
 	_, p, admin := fixture(t)
 	seed(t, admin, 100000)
 	r := &cdr.Repository{Pools: p}
-	loc, _ := time.LoadLocation("Europe/Sofia")
-	reports := &stats.Repository{CDR: r, Location: loc}
 	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	var mu sync.Mutex
 	durations := []time.Duration{}
@@ -33,9 +30,6 @@ func TestReferencePerformance(t *testing.T) {
 			for i := 0; i < 5; i++ {
 				start := time.Now()
 				_, e := r.List(context.Background(), "t", cdr.Filter{From: from, To: from.Add(24 * time.Hour), Page: 1, PageSize: 25, Sort: "start", Order: "desc"})
-				if e == nil {
-					_, e = reports.Overview(context.Background(), "t", from, from.Add(24*time.Hour), "day")
-				}
 				elapsed := time.Since(start)
 				if e != nil {
 					t.Error(e)

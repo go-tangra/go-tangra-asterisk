@@ -7,11 +7,9 @@ All paths below are relative to `/api/asterisk` and require verified tenant bind
 | GET /capabilities | calls:read | Availability/freshness without secrets |
 | GET /calls | calls:read | from,to,src,dst,extension,direction,disposition,page,page_size,sort,order; paged logical calls |
 | GET /calls/{linkedid} | calls:read | summary, legs, timeline; optional quality and call-time registration |
-| GET /stats/overview | stats:read | from,to,bucket(hour/day/week); totals, means, series |
-| GET /stats/extensions | stats:read | from,to,extension,pagination/sort; paged extension stats |
-| GET /stats/extensions/{extension} | stats:read | from,to,bucket; summary, series, hourOfDay |
-| GET /stats/ringgroups/{ring_group} | stats:read | from,to; outcome counts and bounded missedCalls |
 | GET /directory/extensions | stats:read | directory items with optional names |
+
+The statistics endpoints `/stats/overview`, `/stats/extensions`, `/stats/extensions/{extension}` and `/stats/ringgroups/{ring_group}` were removed in 4.11.0; the `/support/*` reports replace them.
 | GET /registration/status/{extension} | registration:read | optional at (now); status, registered, certainty, lastEvent |
 | GET /registration/events | registration:read | from,to,extension,pagination; observed events |
 | GET /registration/online | registration:read | optional at; endpoints plus uncertainty/gap metadata |

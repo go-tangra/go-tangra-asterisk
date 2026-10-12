@@ -23,7 +23,7 @@ func TestManifestRoutesRolesAndValidation(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(man.Routes) != 24 {
+	if len(man.Routes) != 20 {
 		t.Fatalf("missing routes: %d", len(man.Routes))
 	}
 	for _, route := range man.Routes {
