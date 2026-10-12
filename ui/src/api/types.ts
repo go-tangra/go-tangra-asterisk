@@ -22,3 +22,7 @@ export interface LiveCall {linkedid:string;channels:{uniqueid:string;channel:str
 export interface LiveSnapshot {calls:LiveCall[];generation:number;fresh:boolean;updated:string}
 export interface LiveUpdate {call?:LiveCall;linkedid?:string;generation:number;fresh:boolean}
 export interface MetricSeries {labels:Record<string,string>;samples:{time:string;value:number|null;hasValue:boolean}[]}
+export type SupportSummary = components['schemas']['SupportSummary']
+export type SupportAgent = components['schemas']['SupportAgent'] & Record<string, unknown>
+export type SupportLost = components['schemas']['SupportLost'] & Record<string, unknown>
+export type SupportSpread = components['schemas']['SupportSpread']

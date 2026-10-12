@@ -18,7 +18,7 @@ import (
 const (
 	Module       = "asterisk"
 	DisplayName  = "Asterisk"
-	Version      = "1.2.0" // bump on every manifest change (TestManifestVersionPinned)
+	Version      = "1.3.0" // bump on every manifest change (TestManifestVersionPinned)
 	RemotePrefix = "/ui"
 	APIPrefix    = "/api/asterisk"
 )
@@ -60,6 +60,7 @@ var Abilities = []gatewayclient.Ability{
 	{Action: []string{"read"}, Subject: []string{"AsteriskDashboard"}, Requires: "dashboard:read"},
 }
 var Nav = []gatewayclient.NavEntry{
+	{Title: "Support team", Path: "/asterisk/team", Icon: "mdi-account-group", Order: 979, Requires: "stats:read"},
 	{Title: "Call history", Path: "/asterisk", Icon: "mdi-phone-log", Order: 980, Requires: "calls:read"},
 	{Title: "Overview", Path: "/asterisk/overview", Icon: "mdi-chart-bar", Order: 981, Requires: "stats:read"},
 	{Title: "Extensions", Path: "/asterisk/extensions", Icon: "mdi-phone", Order: 982, Requires: "stats:read"},
