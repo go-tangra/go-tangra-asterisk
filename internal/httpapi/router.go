@@ -38,9 +38,7 @@ type History interface {
 	List(context.Context, string, cdr.Filter) (cdr.List, error)
 }
 type Reports interface {
-	Overview(context.Context, string, time.Time, time.Time, string) (stats.Overview, error)
 	Directory(context.Context, string) ([]stats.DirectoryEntry, error)
-	Ringgroup(context.Context, string, string, time.Time, time.Time) (stats.Ringgroup, error)
 }
 type Deps struct {
 	Tenant            string
@@ -90,7 +88,7 @@ func New(d Deps) (*Server, error) {
 	if e != nil {
 		return nil, e
 	}
-	handlers := map[string]http.HandlerFunc{"/capabilities": s.capabilities, "/calls": s.calls, "/calls/{linkedid}": s.callDetail, "/stats/overview": s.overview, "/stats/extensions": s.extensions, "/stats/extensions/{extension}": s.extension, "/stats/ringgroups/{ring_group}": s.ringgroup, "/directory/extensions": s.directory, "/registration/status/{extension}": s.registrationStatus, "/registration/events": s.registrationEvents, "/registration/online": s.registrationOnline, "/registration/timeline/{extension}": s.registrationTimeline, "/live/calls": s.liveSnapshot, "/live/board": s.liveBoard, "/live/calls/stream": s.liveStream, "/recordings/{linkedid}": s.recording, "/dashboard/query": s.query, "/dashboard/query_range": s.queryRange, "/support/summary": s.supportSummary, "/support/agents": s.supportAgents, "/support/lost": s.supportLost, "/support/calls": s.supportCalls, "/support/listens": s.supportListens, "/support/quality": s.supportQuality}
+	handlers := map[string]http.HandlerFunc{"/capabilities": s.capabilities, "/calls": s.calls, "/calls/{linkedid}": s.callDetail, "/directory/extensions": s.directory, "/registration/status/{extension}": s.registrationStatus, "/registration/events": s.registrationEvents, "/registration/online": s.registrationOnline, "/registration/timeline/{extension}": s.registrationTimeline, "/live/calls": s.liveSnapshot, "/live/board": s.liveBoard, "/live/calls/stream": s.liveStream, "/recordings/{linkedid}": s.recording, "/dashboard/query": s.query, "/dashboard/query_range": s.queryRange, "/support/summary": s.supportSummary, "/support/agents": s.supportAgents, "/support/lost": s.supportLost, "/support/calls": s.supportCalls, "/support/listens": s.supportListens, "/support/quality": s.supportQuality}
 	for _, route := range man.Routes {
 		short := strings.TrimPrefix(route.Path, asteriskmanifest.APIPrefix)
 		h, ok := handlers[short]
@@ -224,16 +222,6 @@ func pagination(r *http.Request, allow []string, def string) (page, size int, so
 		err = errors.New("invalid order")
 	}
 	return
-}
-func bucket(r *http.Request) (string, error) {
-	b := r.URL.Query().Get("bucket")
-	if b == "" {
-		b = "day"
-	}
-	if b != "hour" && b != "day" && b != "week" {
-		return "", errors.New("invalid bucket")
-	}
-	return b, nil
 }
 
 func (s *Server) validate(next http.Handler) http.Handler {

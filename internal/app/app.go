@@ -123,7 +123,7 @@ func Build(ctx context.Context, c config.Config, o Options) (a *App, err error) 
 		return nil, errors.New("invalid source timezone")
 	}
 	repo := &cdr.Repository{Pools: a.Pools}
-	reports := &stats.Repository{CDR: repo, Location: location}
+	reports := &stats.Repository{CDR: repo}
 	if c.Binding.RegistrationDSN != "" {
 		a.feature(ctx, "registration", a.prune, func(ctx context.Context) error {
 			r, e := registration.Open(ctx, c)

@@ -11,7 +11,6 @@ import (
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/config"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/pbx"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/registration"
-	"github.com/go-tangra/go-tangra-asterisk/v4/internal/stats"
 	"os"
 	"strconv"
 	"strings"
@@ -120,12 +119,6 @@ func TestMySQLLogicalParityAndReadOnly(t *testing.T) {
 	}
 	if _, e = p.CDR.ExecContext(ctx, "INSERT INTO cdr(linkedid) VALUES('forbidden')"); e == nil {
 		t.Fatal("source credential can write")
-	}
-	loc, _ := time.LoadLocation("Europe/Sofia")
-	reports := stats.Repository{CDR: r, Location: loc}
-	v, e := reports.Overview(ctx, "t", from, to, "day")
-	if e != nil || v.Total != 2 || v.Answered != 2 {
-		t.Fatalf("bad reports %+v %v", v, e)
 	}
 	if c.Binding.RegistrationDSN == "" {
 		t.Fatal("registration fixture DSN required for full acceptance")

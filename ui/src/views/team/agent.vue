@@ -10,9 +10,10 @@ import PeriodFilter from '@/components/PeriodFilter.vue'
 import { useLatest } from '@/components/latest'
 import { learnTimezone } from '@/components/timezone'
 import { percent, seconds, spreadText } from '@/components/support'
-import RegistrationTimelineView from '../extensions/registration-timeline.vue'
+import RegistrationTab from './registration-tab.vue'
 // One agent: how they handled the team's calls, their own calls, and when
-// they were online. The period comes from the Team page when opened there.
+// they were online. The registration history shows for any extension, also
+// one without support calls in the period. The period comes from the Team page when opened there.
 const route=useRoute(),router=useRouter(),ability=useAbility()
 const extension=computed(()=>String(route.params.extension))
 const {from,to,query}=usePeriod(7)
@@ -46,11 +47,11 @@ const title=computed(()=>agent.value?.name?`${extension.value} · ${agent.value.
   <UiStatTile title="Callbacks" :value="agent.outbound.callbacks" icon="mdi-phone-return" subtitle="lost callers called back"/>
   <UiStatTile title="Direct calls answered" :value="agent.inbound.directAnswered" icon="mdi-phone-incoming" :subtitle="seconds(agent.inbound.directTalkSeconds)+' talk'"/>
  </UiStatGrid>
- <UiCard v-if="ability.can('read','AsteriskRegistration')">
-  <h3>Online</h3>
-  <p class="text-sm">{{handled}} calls handled, {{seconds(talk)}} on the phone<template v-if="online"> · online {{seconds(online.summary.onlineSeconds)}} · on calls {{occupancy}} of online time</template>.</p>
-  <RegistrationTimelineView :extension="extension" :from="period.from" :to="period.to" @loaded="online=$event"/>
- </UiCard>
 </div>
 <p v-else-if="loading">Loading…</p>
+<UiCard v-if="ability.can('read','AsteriskRegistration')" class="mt-4">
+ <h3>Online</h3>
+ <p v-if="agent||online" class="text-sm"><template v-if="agent">{{handled}} calls handled, {{seconds(talk)}} on the phone</template><template v-if="online"><template v-if="agent"> · </template>online {{seconds(online.summary.onlineSeconds)}}<template v-if="agent"> · on calls {{occupancy}} of online time</template></template>.</p>
+ <RegistrationTab :extension="extension" :from="period.from" :to="period.to" @loaded="online=$event"/>
+</UiCard>
 </UiPage></template>

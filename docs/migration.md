@@ -5,7 +5,7 @@ Source: `/home/jadmin/projects/go-tangra/go-tangra-asterisk` (read only during i
 | Source capability | Reusable behavior | V4 surface |
 |---|---|---|
 | `internal/data/cdr_repo.go`, `extension.go` | Channel extension parsing, logical leg grouping, directions, CEL pickup | `/api/asterisk/calls`, `/calls/{linkedid}` |
-| `stats_repo.go` | Logical counts, external workload, overview/extensions/ringgroup drilldowns | `/api/asterisk/stats/*`, `/directory/extensions` |
+| `stats_repo.go` | Extension directory; the counts and drilldowns became the support reports (4.11) | `/api/asterisk/directory/extensions`, `/support/*` |
 | `pjsip_reg_repo.go`, `internal/ami/*` | Contact observations, expiry and AMI frames | `/api/asterisk/registration/*` |
 | `internal/calls/*`, public `/calls/stream` | Channel/bridge registry and snapshot streaming | `/api/asterisk/live/calls`, `/live/calls/stream` |
 | Public `/recordings/{linkedid}` | Recording lookup and byte ranges | `/api/asterisk/recordings/{linkedid}`, two permissions |
@@ -19,7 +19,7 @@ The API prefix applies to all route suffixes in the last column. Public legacy a
 
 Group complete call legs by linkedid. Logical start is the earliest leg; selected periods contain starts in `[from,to)`. Sort legs by start, sequence, uniqueid and channel; ties in list sorting use linkedid. Any ANSWERED leg wins, then BUSY, then FAILED, then NO ANSWER, as required by the V4 specification. This deliberately follows the spec's any-answer rule rather than the legacy repository's additional non-empty destination-channel restriction for announcement legs. The first ordered answered leg determines answering extension and pickup, with CHAN_START/ANSWER from that same uniqueid. Missing CEL pickup remains null. Duration and talk use logical maxima, never summed duplicated legs.
 
-Per-extension counts include involvement once per logical call; answered talk belongs to the answering extension (or outbound originating extension). Workload shares use external answered talk only; internal/unknown traffic does not enter the denominator. Ringgroup membership matches any leg destination. Hour/day/week buckets use the configured IANA zone; repeated DST hours have different UTC timestamps. Report time labels and hour histograms use the PBX display zone returned by the report API. History queries have a 200,000-leg bound and a five-second default deadline; requests exceeding it must use a narrower period.
+Team, agent, lost-call and quality figures are the support reports, classified from CDR and CEL as [support-metrics.md](support-metrics.md) defines. History queries have a 200,000-leg bound and a five-second default deadline; requests exceeding it must use a narrower period.
 
 Quality parsing preserves missing individual measurements as null, rejects nonfinite/negative numbers, and exposes separate local/peer measurements. Registration evaluates each contact separately. Removed and expired contacts do not register an endpoint; an endpoint is registered if a qualifying nonexpired contact remains. Unreachable is observed reachability failure; no evidence is unknown, and observation gaps are uncertain. Reconnect removes contacts absent from reconciliation and leaves historical gaps intact.
 
@@ -43,3 +43,20 @@ Source CDR/config DSNs must identify databases separate from registration storag
 | implicit Sofia conversion | `binding.source_timezone`, `binding.timezone` |
 
 To roll back, stop V4 so gateway leases deregister and workers/streams close; restore the previous portal module deployment and its database backup if needed. PBX source databases remain untouched. Retain the backup and ownership/gap metadata for forward recovery; no automatic destructive down migration is supplied.
+
+## Within v4: the support reports
+
+Releases 4.6.0 to 4.11.0 replaced the v3-era statistics with support-team reports. Upgrading from an earlier v4 release:
+
+1. Install the new package or image as usual (`install-standalone.sh --latest` without containers). The support reports need `registration_dsn` (the module-owned database); they create their own tables (`support_*`) on start and backfill everything CDR/CEL still hold, 500 calls at a time. Releases that change the classification rules re-classify the history once on start.
+2. Name the team in the configuration: `support.groups` (the support ring groups, default every ring group) and `support.exclude` (extensions or ranges that are not support staff). See the README.
+3. The AMI account needs nothing new; the live board also sends the read-only `DeviceStateList` action.
+
+| Removed (4.11.0) | Use instead |
+|---|---|
+| Overview page, `GET /stats/overview`, `GET /stats/ringgroups/{ring_group}` | Support team page, `GET /support/summary`, `GET /support/lost` |
+| Extensions page, `GET /stats/extensions`, `GET /stats/extensions/{extension}` | Agent pages (`/asterisk/team/{extension}`), `GET /support/agents`; registration history moved to the agent page |
+| Old live calls view | Live board, `GET /live/board` (`/live/calls` and its stream remain) |
+| Call history as the Calls page | Call search, `GET /support/calls`; the raw CDR log is at `/asterisk/calls/log` |
+
+Bookmarks to `/asterisk/overview` and `/asterisk/extensions` redirect to the Support team page. The gateway manifest is 1.7.0: the gateway drops the removed routes and menu items when the module registers. Nothing outside the module called the removed endpoints, so this stays a minor release; clients of the module's HTTP API other than its own UI must move to `/support/*`.
