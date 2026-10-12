@@ -18,7 +18,7 @@ import (
 const (
 	Module       = "asterisk"
 	DisplayName  = "Asterisk"
-	Version      = "1.5.0" // bump on every manifest change (TestManifestVersionPinned)
+	Version      = "1.6.0" // bump on every manifest change (TestManifestVersionPinned)
 	RemotePrefix = "/ui"
 	APIPrefix    = "/api/asterisk"
 )
@@ -60,11 +60,12 @@ var Abilities = []gatewayclient.Ability{
 	{Action: []string{"read"}, Subject: []string{"AsteriskDashboard"}, Requires: "dashboard:read"},
 }
 var Nav = []gatewayclient.NavEntry{
-	{Title: "Support team", Path: "/asterisk/team", Icon: "mdi-account-group", Order: 979, Requires: "stats:read"},
-	{Title: "Calls", Path: "/asterisk", Icon: "mdi-phone-log", Order: 980, Requires: "calls:read"},
+	{Title: "Support team", Path: "/asterisk/team", Icon: "mdi-account-group", Order: 975, Requires: "stats:read"},
+	{Title: "Calls", Path: "/asterisk", Icon: "mdi-phone-log", Order: 977, Requires: "calls:read"},
+	{Title: "Call quality", Path: "/asterisk/quality", Icon: "mdi-signal-cellular-outline", Order: 978, Requires: "stats:read"},
 	{Title: "Overview", Path: "/asterisk/overview", Icon: "mdi-chart-bar", Order: 981, Requires: "stats:read"},
 	{Title: "Extensions", Path: "/asterisk/extensions", Icon: "mdi-phone", Order: 982, Requires: "stats:read"},
-	{Title: "Live board", Path: "/asterisk/live", Icon: "mdi-access-point", Order: 983, Requires: "live:read"},
+	{Title: "Live board", Path: "/asterisk/live", Icon: "mdi-access-point", Order: 976, Requires: "live:read"},
 	{Title: "Monitoring", Path: "/asterisk/dashboards", Icon: "mdi-chart-line", Order: 984, Requires: "dashboard:read"},
 }
 

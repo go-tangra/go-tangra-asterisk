@@ -2365,6 +2365,99 @@
           }
         ]
       }
+    },
+    "/api/asterisk/support/quality": {
+      "get": {
+        "operationId": "support__quality",
+        "x-freya-permission": "stats:read",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportQuality"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": true
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": true
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -3863,7 +3956,8 @@
           "talkSeconds",
           "rang",
           "recorded",
-          "quality"
+          "quality",
+          "qualitySide"
         ],
         "properties": {
           "linkedid": {
@@ -3921,6 +4015,14 @@
               "good",
               "fair",
               "poor"
+            ]
+          },
+          "qualitySide": {
+            "type": "string",
+            "enum": [
+              "",
+              "trunk",
+              "phone"
             ]
           }
         }
@@ -3999,6 +4101,161 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SupportListen"
+            }
+          }
+        }
+      },
+      "SupportFSpread": {
+        "type": "object",
+        "required": [
+          "median",
+          "p90"
+        ],
+        "properties": {
+          "median": {
+            "type": "number",
+            "nullable": true
+          },
+          "p90": {
+            "type": "number",
+            "nullable": true
+          }
+        }
+      },
+      "SupportQualityGroup": {
+        "type": "object",
+        "required": [
+          "key",
+          "calls",
+          "poor",
+          "lossPercent",
+          "jitterMs",
+          "rttMs",
+          "mos"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "calls": {
+            "type": "integer"
+          },
+          "poor": {
+            "type": "integer"
+          },
+          "lossPercent": {
+            "$ref": "#/components/schemas/SupportFSpread"
+          },
+          "jitterMs": {
+            "$ref": "#/components/schemas/SupportFSpread"
+          },
+          "rttMs": {
+            "$ref": "#/components/schemas/SupportFSpread"
+          },
+          "mos": {
+            "$ref": "#/components/schemas/SupportFSpread"
+          }
+        }
+      },
+      "SupportPoorCall": {
+        "type": "object",
+        "required": [
+          "linkedid",
+          "start",
+          "type",
+          "agent",
+          "trunk",
+          "device",
+          "side",
+          "lossPercent",
+          "jitterMs",
+          "rttMs",
+          "mos"
+        ],
+        "properties": {
+          "linkedid": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "type": {
+            "type": "string"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "trunk": {
+            "type": "string"
+          },
+          "device": {
+            "type": "string"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "trunk",
+              "phone"
+            ]
+          },
+          "lossPercent": {
+            "type": "number",
+            "nullable": true
+          },
+          "jitterMs": {
+            "type": "number",
+            "nullable": true
+          },
+          "rttMs": {
+            "type": "number",
+            "nullable": true
+          },
+          "mos": {
+            "type": "number",
+            "nullable": true
+          }
+        }
+      },
+      "SupportQuality": {
+        "type": "object",
+        "required": [
+          "trunk",
+          "phone",
+          "byTrunk",
+          "byAgent",
+          "byDevice",
+          "poorCalls"
+        ],
+        "properties": {
+          "trunk": {
+            "$ref": "#/components/schemas/SupportQualityGroup"
+          },
+          "phone": {
+            "$ref": "#/components/schemas/SupportQualityGroup"
+          },
+          "byTrunk": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupportQualityGroup"
+            }
+          },
+          "byAgent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupportQualityGroup"
+            }
+          },
+          "byDevice": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupportQualityGroup"
+            }
+          },
+          "poorCalls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupportPoorCall"
             }
           }
         }

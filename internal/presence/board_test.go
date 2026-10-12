@@ -12,7 +12,7 @@ var t0 = time.Date(2026, 10, 8, 8, 46, 1, 0, time.UTC)
 func ch(id, name, state, caller, connected string, created time.Time, bridged *time.Time) calls.Channel {
 	return calls.Channel{UniqueID: id, LinkedID: "L", Channel: name, State: state, Caller: caller, Connected: connected, Created: created, Bridged: bridged}
 }
-func at(s int) time.Time { return t0.Add(time.Duration(s) * time.Second) }
+func at(s int) time.Time         { return t0.Add(time.Duration(s) * time.Second) }
 func ptr(t time.Time) *time.Time { return &t }
 
 func board() *Board {

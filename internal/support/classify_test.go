@@ -143,3 +143,13 @@ func leg(c Call, ext string) AgentLeg {
 	}
 	return AgentLeg{}
 }
+
+func TestQualitySide(t *testing.T) {
+	for dir, side := range map[string]string{"group-answered": QualityTrunk, "outbound-connected": QualityPhone, "group-caller-hung-up": "", "outbound-not-connected": ""} {
+		cdrs, cels := loadGolden(t, "testdata/golden/"+dir)
+		c := Classify(goldenRouting, cdrs, cels)
+		if c.QualitySide != side || (side != "") != (c.Quality != "") {
+			t.Errorf("%s: side %q quality %q, want side %q", dir, c.QualitySide, c.Quality, side)
+		}
+	}
+}

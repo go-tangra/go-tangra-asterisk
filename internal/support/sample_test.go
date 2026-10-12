@@ -37,12 +37,16 @@ func TestSurveySample(t *testing.T) {
 		rowsByCall[r.LinkedID] = append(rowsByCall[r.LinkedID], r)
 	}
 	counts := map[string]int{}
-	legs := map[string]int{}
+	legs, sides, grades := map[string]int{}, map[string]int{}, map[string]int{}
 	for id, evs := range byCall {
 		c := Classify(goldenRouting, rowsByCall[id], evs)
 		counts[c.Kind+" "+c.Outcome+" "+c.LostReason+c.Destination]++
 		for _, l := range c.Legs {
 			legs[l.Outcome]++
+		}
+		if c.Outcome == OutcomeAnswered || c.Outcome == OutcomeConnected {
+			sides[c.Kind+"/"+c.QualitySide]++
+			grades[Grade(c.Quality)]++
 		}
 	}
 	var keys []string
@@ -54,4 +58,5 @@ func TestSurveySample(t *testing.T) {
 		t.Logf("%5d %s", counts[k], k)
 	}
 	t.Logf("agent legs: %v", legs)
+	t.Logf("quality measured on answered/connected calls: %v, grades %v", sides, grades)
 }

@@ -372,6 +372,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/asterisk/support/quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["support__quality"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -766,6 +782,8 @@ export interface components {
             recorded: boolean;
             /** @enum {string} */
             quality: "" | "good" | "fair" | "poor";
+            /** @enum {string} */
+            qualitySide: "" | "trunk" | "phone";
         };
         SupportCallPage: {
             timezone: string;
@@ -786,6 +804,42 @@ export interface components {
         };
         SupportListens: {
             items: components["schemas"]["SupportListen"][];
+        };
+        SupportFSpread: {
+            median: number | null;
+            p90: number | null;
+        };
+        SupportQualityGroup: {
+            key: string;
+            calls: number;
+            poor: number;
+            lossPercent: components["schemas"]["SupportFSpread"];
+            jitterMs: components["schemas"]["SupportFSpread"];
+            rttMs: components["schemas"]["SupportFSpread"];
+            mos: components["schemas"]["SupportFSpread"];
+        };
+        SupportPoorCall: {
+            linkedid: string;
+            /** Format: date-time */
+            start: string;
+            type: string;
+            agent: string;
+            trunk: string;
+            device: string;
+            /** @enum {string} */
+            side: "trunk" | "phone";
+            lossPercent: number | null;
+            jitterMs: number | null;
+            rttMs: number | null;
+            mos: number | null;
+        };
+        SupportQuality: {
+            trunk: components["schemas"]["SupportQualityGroup"];
+            phone: components["schemas"]["SupportQualityGroup"];
+            byTrunk: components["schemas"]["SupportQualityGroup"][];
+            byAgent: components["schemas"]["SupportQualityGroup"][];
+            byDevice: components["schemas"]["SupportQualityGroup"][];
+            poorCalls: components["schemas"]["SupportPoorCall"][];
         };
     };
     responses: never;
@@ -2348,6 +2402,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupportListens"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    support__quality: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportQuality"];
                 };
             };
             /** @description Invalid request */

@@ -32,3 +32,6 @@ export type LiveWaiting = components['schemas']['LiveWaiting']
 export type SupportCall = components['schemas']['SupportCall'] & Record<string, unknown>
 export type SupportCallPage = components['schemas']['SupportCallPage']
 export type SupportListen = components['schemas']['SupportListen']
+export type SupportQuality = components['schemas']['SupportQuality']
+export type SupportQualityGroup = components['schemas']['SupportQualityGroup'] & Record<string, unknown>
+export type SupportPoorCall = components['schemas']['SupportPoorCall'] & Record<string, unknown>

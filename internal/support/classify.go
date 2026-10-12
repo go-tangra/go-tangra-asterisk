@@ -68,6 +68,12 @@ const (
 	LegColleagueAnswered = "colleague-answered"
 	LegCallerHungUp      = "caller-hung-up"
 	LegRangOut           = "rang-out"
+
+	// FreePBX logs the RTP report of the channel that owns the CDR row: on an
+	// inbound call the caller's trunk channel (PBX to provider), on an
+	// outbound call the agent's phone (PBX to handset).
+	QualityTrunk = "trunk"
+	QualityPhone = "phone"
 )
 
 // Call is one classified call. Durations are whole seconds; nil when the
@@ -90,7 +96,8 @@ type Call struct {
 	Talk         *int64
 	Setup        *int64 // outbound: dial to connect, or to give-up
 	Recorded     bool
-	Quality      string // rtpqos of the agent's leg, raw
+	Quality      string // rtpqos as FreePBX logged it (raw), when the call was answered
+	QualitySide  string // which leg Quality measures: QualityTrunk or QualityPhone
 	Legs         []AgentLeg
 }
 
@@ -291,9 +298,11 @@ func inbound(c *Call, r Routing, caller *channel, order []*channel, groupAt time
 		} else {
 			c.Ring = secs(answered.answer.Sub(answered.start))
 		}
+		// The report sits on the caller channel's last row, which need not
+		// be the answering agent's (a ring group logs one row per member).
 		for _, row := range cdrs {
-			if row.DstChannel == answered.name {
-				c.Quality = row.RTPQoS
+			if row.Channel == caller.name && row.RTPQoS != "" {
+				c.Quality, c.QualitySide = row.RTPQoS, QualityTrunk
 			}
 		}
 	} else {
@@ -346,8 +355,8 @@ func outbound(c *Call, agent, trunk *channel, cdrs []CDRRow) {
 	for _, row := range cdrs {
 		if row.Channel == agent.name && row.Dst != "" {
 			c.Caller = row.Dst
-			if row.DstChannel == trunk.name {
-				c.Quality = row.RTPQoS
+			if row.DstChannel == trunk.name && row.RTPQoS != "" && trunk.answered {
+				c.Quality, c.QualitySide = row.RTPQoS, QualityPhone
 			}
 		}
 	}

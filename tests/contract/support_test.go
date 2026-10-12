@@ -55,6 +55,8 @@ func TestSupportRoutes(t *testing.T) {
 		{s, "/support/calls" + day + "&type=bogus", 400},
 		{s, "/support/calls" + day + "&min_talk=-1", 400},
 		{s, "/support/listens" + day + "&linkedid=a", 200},
+		{s, "/support/quality" + day, 200},
+		{s, "/support/quality?from=2026-09-01T00:00:00Z&to=2026-10-09T00:00:00Z", 400}, // over 31 days
 		{unavailable, "/support/listens" + day, 503},
 		{s, "/support/summary?from=2026-01-01T00:00:00Z&to=2026-06-01T00:00:00Z", 400}, // over 92 days
 		{s, "/support/summary?from=2026-10-09T00:00:00Z&to=2026-10-08T00:00:00Z", 400},

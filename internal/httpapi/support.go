@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/go-tangra/go-tangra-asterisk/v4/internal/registration"
 	"github.com/go-tangra/go-tangra-asterisk/v4/internal/support"
 )
 
@@ -157,4 +158,42 @@ func (s *Server) names(r *http.Request) map[string]string {
 		}
 	}
 	return names
+}
+
+// qualityRange bounds the quality report: the phone model of each call comes
+// from the registration timeline, served for at most 31 days.
+const qualityRange = 31 * 24 * time.Hour
+
+// supportQuality is call quality per measured side, by trunk, agent and
+// phone model, with the poor calls.
+func (s *Server) supportQuality(w http.ResponseWriter, r *http.Request) {
+	if from, to, e := interval(r); e == nil && to.Sub(from) > qualityRange {
+		writeError(w, r, 400, "INVALID_ARGUMENT")
+		return
+	}
+	_, calls, from, to, ok := s.supportPeriod(w, r)
+	if !ok {
+		return
+	}
+	device := func(string, time.Time) string { return "" }
+	if store := s.registration(); store != nil {
+		timelines := map[string][]registration.Segment{}
+		device = func(ext string, at time.Time) string {
+			segs, seen := timelines[ext]
+			if !seen {
+				tl, err := store.Timeline(r.Context(), tenant(r), ext, from, to)
+				if err == nil {
+					segs = tl.Segments
+				}
+				timelines[ext] = segs
+			}
+			for _, sg := range segs {
+				if !at.Before(sg.Start) && at.Before(sg.End) {
+					return sg.UserAgent
+				}
+			}
+			return ""
+		}
+	}
+	jsonResponse(w, support.Quality(calls, from, to, device))
 }
