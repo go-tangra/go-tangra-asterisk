@@ -285,3 +285,52 @@ func (r *Repository) Contacts(ctx context.Context) ([]Event, error) {
 	defer rows.Close()
 	return scan(rows)
 }
+
+// Timeline returns an extension's registration states over [from, to),
+// capped at now. It reads the last event of each contact before from (the
+// state the period starts in), the period's events and its observation gaps.
+func (r *Repository) Timeline(ctx context.Context, tenant, extension string, from, to time.Time) (Timeline, error) {
+	if e := r.authorized(tenant); e != nil {
+		return Timeline{}, e
+	}
+	if now := time.Now().UTC(); to.After(now) {
+		to = now
+	}
+	if !to.After(from) {
+		return BuildTimeline(extension, from, from, nil, nil), nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, r.Timeout)
+	defer cancel()
+	rows, e := r.DB.QueryContext(ctx, "SELECT "+eventColumns+" FROM (SELECT "+eventColumns+",ROW_NUMBER() OVER (PARTITION BY contact_uri ORDER BY event_time DESC,id DESC) AS rn FROM pjsip_registration_events WHERE endpoint=? AND event_time<?) latest WHERE rn=1 "+
+		"UNION ALL SELECT "+eventColumns+" FROM pjsip_registration_events WHERE endpoint=? AND event_time>=? AND event_time<? ORDER BY event_time,id LIMIT 20001", extension, from, extension, from, to)
+	if e != nil {
+		return Timeline{}, e
+	}
+	events, e := scan(rows)
+	rows.Close()
+	if e != nil {
+		return Timeline{}, e
+	}
+	grows, e := r.DB.QueryContext(ctx, "SELECT started_at,ended_at FROM asterisk_observation_gaps WHERE started_at<? AND (ended_at IS NULL OR ended_at>?) ORDER BY started_at LIMIT 1000", to, from)
+	if e != nil {
+		return Timeline{}, e
+	}
+	defer grows.Close()
+	gaps := []Gap{}
+	for grows.Next() {
+		var g Gap
+		var end sql.NullTime
+		if e = grows.Scan(&g.Start, &end); e != nil {
+			return Timeline{}, e
+		}
+		g.Start = g.Start.UTC()
+		if end.Valid {
+			g.End = end.Time.UTC()
+		}
+		gaps = append(gaps, g)
+	}
+	if e = grows.Err(); e != nil {
+		return Timeline{}, e
+	}
+	return BuildTimeline(extension, from, to, events, gaps), nil
+}

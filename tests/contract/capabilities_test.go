@@ -75,3 +75,24 @@ func TestCapabilitiesReportTimezone(t *testing.T) {
 		t.Fatalf("%s", w.Body.String())
 	}
 }
+
+// The timeline is bounded to 31 days and needs the registration database.
+func TestRegistrationTimelineBounds(t *testing.T) {
+	var store atomic.Pointer[registration.Repository]
+	store.Store(&registration.Repository{Tenant: "t"})
+	s, e := httpapi.New(httpapi.Deps{Tenant: "t", Verifier: validIdentity{}, Checker: allow{}, Registration: store.Load})
+	if e != nil {
+		t.Fatal(e)
+	}
+	for path, want := range map[string]int{
+		"/api/asterisk/registration/timeline/49?from=2026-09-01T00:00:00Z&to=2026-10-12T00:00:00Z": 400,
+		"/api/asterisk/registration/timeline/49?from=2026-10-12T00:00:00Z&to=2026-10-11T00:00:00Z": 400,
+		"/api/asterisk/registration/timeline/49?from=2026-10-05T00:00:00Z&to=2026-10-12T00:00:00Z": 503,
+	} {
+		w := httptest.NewRecorder()
+		s.Handler().ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		if w.Code != want {
+			t.Errorf("%s: %d, want %d", path, w.Code, want)
+		}
+	}
+}

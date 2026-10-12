@@ -15,6 +15,7 @@ All paths below are relative to `/api/asterisk` and require verified tenant bind
 | GET /registration/status/{extension} | registration:read | optional at (now); status, registered, certainty, lastEvent |
 | GET /registration/events | registration:read | from,to,extension,pagination; observed events |
 | GET /registration/online | registration:read | optional at; endpoints plus uncertainty/gap metadata |
+| GET /registration/timeline/{extension} | registration:read | from,to (≤31 days, capped at now); online/offline/unknown segments, gaps, summary |
 | GET /live/calls | live:read | current calls and freshness |
 | GET /live/calls/stream | live:read | text/event-stream; snapshot, upsert, remove, status; periodic heartbeat comments |
 | GET /recordings/{linkedid} | recordings:read + calls:read | CDR-selected media; full 200, valid range 206, unsatisfiable range 416 |

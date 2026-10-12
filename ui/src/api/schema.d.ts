@@ -180,6 +180,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/asterisk/registration/timeline/{extension}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["registration__registration_timeline_extension"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/asterisk/live/calls": {
         parameters: {
             query?: never;
@@ -437,6 +453,34 @@ export interface components {
             items: components["schemas"]["RegistrationStatus"][];
             gaps: components["schemas"]["Gap"][];
             uncertain: boolean;
+        };
+        RegistrationSegment: {
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @enum {string} */
+            state: "online" | "offline" | "unknown";
+            contact?: string;
+            userAgent?: string;
+            viaAddress?: string;
+        };
+        RegistrationTimelineSummary: {
+            onlineSeconds: number;
+            offlineSeconds: number;
+            unknownSeconds: number;
+            dropouts: number;
+            longestOfflineSeconds: number;
+        };
+        RegistrationTimeline: {
+            extension: string;
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            segments: components["schemas"]["RegistrationSegment"][];
+            gaps: components["schemas"]["Gap"][];
+            summary: components["schemas"]["RegistrationTimelineSummary"];
         };
         LiveChannel: {
             uniqueid: string;
@@ -1222,6 +1266,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RegistrationOnline"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Invalid session */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Denied */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Missing */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    registration__registration_timeline_extension: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path: {
+                extension: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationTimeline"];
                 };
             };
             /** @description Invalid request */
