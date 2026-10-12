@@ -8,10 +8,10 @@ import { pbxTimezone } from '@/components/timezone'
 import type { RegistrationTimeline } from '@/api/types'
 // The API serves at most 31 days; a longer period shows its last 31 days.
 const MAX_DAYS=31
-const props=defineProps<{extension:string;from:string;to:string}>();const timeline=ref<RegistrationTimeline>(),error=ref(''),loading=ref(false),picked=ref<DayPiece>()
+const props=defineProps<{extension:string;from:string;to:string}>();const emit=defineEmits<{loaded:[RegistrationTimeline|undefined]}>();const timeline=ref<RegistrationTimeline>(),error=ref(''),loading=ref(false),picked=ref<DayPiece>()
 const request=useLatest()
 const range=computed(()=>{const to=Date.parse(props.to),from=Math.max(Date.parse(props.from),to-MAX_DAYS*86_400_000);return {from:new Date(from).toISOString(),to:new Date(to).toISOString(),clipped:from>Date.parse(props.from)}})
-async function load(){const signal=request.start();error.value='';picked.value=undefined;loading.value=true;try{const v=await get<RegistrationTimeline>('/api/asterisk/registration/timeline/{extension}',{from:range.value.from,to:range.value.to},{extension:props.extension},signal);if(!signal.aborted)timeline.value=v}catch(e){if(!signal.aborted){timeline.value=undefined;error.value=explain(e)}}finally{if(!signal.aborted)loading.value=false}}
+async function load(){const signal=request.start();error.value='';picked.value=undefined;loading.value=true;try{const v=await get<RegistrationTimeline>('/api/asterisk/registration/timeline/{extension}',{from:range.value.from,to:range.value.to},{extension:props.extension},signal);if(!signal.aborted){timeline.value=v;emit('loaded',v)}}catch(e){if(!signal.aborted){timeline.value=undefined;emit('loaded',undefined);error.value=explain(e)}}finally{if(!signal.aborted)loading.value=false}}
 onMounted(load);watch(()=>[props.extension,props.from,props.to],load)
 const days=computed(()=>timeline.value?dayBars(timeline.value,pbxTimezone.value).reverse():[])
 const STATE={online:{label:'Online',fill:'fill-success'},offline:{label:'Offline',fill:'fill-error'},unknown:{label:'No data',fill:'fill-base-content/25'}} as const

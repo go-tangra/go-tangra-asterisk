@@ -1,0 +1,26 @@
+import { flushPromises, mount } from '@vue/test-utils'
+import { afterEach, expect, it, vi } from 'vitest'
+import { createMemoryHistory, createRouter } from 'vue-router'
+import { abilitiesPlugin } from '@casl/vue'
+import { createMongoAbility } from '@casl/ability'
+import Team from '../../src/views/team/index.vue'
+import Agent from '../../src/views/team/agent.vue'
+import { lostText, percent, spreadText } from '../../src/components/support'
+const json=(body:unknown)=>({ok:true,status:200,json:async()=>body})
+const spread=(median:number|null,p90:number|null)=>({count:median==null?0:3,median,p90})
+const agent=(extension:string,member:boolean,answered:number,declined=0)=>({extension,name:extension==='49'?'Tsvetomila':'',member,inbound:{offered:10,answered,declined,colleagueAnswered:10-answered-declined,rangWhileLost:0,answerShare:answered/10,timeToAnswerSeconds:spread(answered?4:null,answered?12:null),talkSeconds:answered*60,directAnswered:0,directTalkSeconds:0},outbound:{attempts:3,connected:2,talkSeconds:120,callbacks:1}})
+const summary={timezone:'Europe/Sofia',team:['41','49'],ingestedAt:'2026-10-12T10:39:23Z',inbound:{calls:20,answered:14,abandonedBeforeGroup:3,lost:3,lostByReason:{'no-agent-available':2,'caller-hung-up-while-ringing':1},calledBack:1,waitSeconds:spread(4,12),announcementSeconds:spread(18,18),talkSeconds:840,directCalls:0,directAnswered:0},outbound:{attempts:6,connected:4,talkSeconds:240}}
+const agents={timezone:'Europe/Sofia',items:[agent('49',true,8),agent('41',true,6,2),agent('201',false,0)]}
+const lost={items:[{linkedid:'x',start:'2026-10-08T10:00:00Z',caller:'0888123456',reason:'no-agent-available',outcome:'lost',waitSeconds:19,rang:[],callbackAt:'2026-10-08T10:30:00Z',callbackBy:'41'}],total:1,page:1,page_size:25}
+function serve(){const fetch=vi.fn(async(url:string)=>url.includes('/support/summary')?json(summary):url.includes('/support/agents')?json(agents):url.includes('/support/lost')?json(lost):url.includes('/capabilities')?json({timezone:'Europe/Sofia'}):json({}));vi.stubGlobal('fetch',fetch);return fetch}
+afterEach(()=>vi.unstubAllGlobals())
+async function mountAt(component:unknown,path:string){
+ const router=createRouter({history:createMemoryHistory(),routes:[{path:'/asterisk/team',name:'asterisk-team',component:Team},{path:'/asterisk/team/:extension',name:'asterisk-agent',component:Agent}]})
+ await router.push(path);await router.isReady()
+ const w=mount(component as never,{global:{plugins:[router,[abilitiesPlugin,createMongoAbility([])]]}})
+ await flushPromises();return {w,router}
+}
+it('formats shares, spreads and lost reasons',()=>{expect(percent(1,3)).toBe('33%');expect(percent(1,0)).toBe('–');expect(spreadText(spread(4,12))).toBe('4 s · p90 12 s');expect(spreadText(spread(null,null))).toBe('–');expect(lostText('abandoned-before-group','')).toBe('Hung up during welcome');expect(lostText('lost','no-agent-available')).toBe('No agent available')})
+it('summarises the team and lists members only until asked',async()=>{serve();const {w}=await mountAt(Team,'/asterisk/team');const text=w.text();expect(text).toContain('70%');expect(text).toContain('Hung up during welcome');expect(text).toContain('2 no agent · 1 while ringing');expect(text).toContain('Tsvetomila');expect(w.findAll('[data-row-key]').map(r=>r.attributes('data-row-key'))).toEqual(['49','41']);expect(text).toContain('1 other extension took part');await w.findAll('button').find(b=>b.text()==='Show them')!.trigger('click');expect(w.findAll('[data-row-key]')).toHaveLength(3)})
+it('opens an agent with the same period',async()=>{serve();const {w,router}=await mountAt(Team,'/asterisk/team');await w.get('[data-row-key="41"]').trigger('click');await flushPromises();expect(router.currentRoute.value.name).toBe('asterisk-agent');expect(router.currentRoute.value.params.extension).toBe('41');expect(router.currentRoute.value.query.from).toBeTruthy()})
+it('shows one agent and says when an extension is not in the team',async()=>{serve();let {w}=await mountAt(Agent,'/asterisk/team/41?from=2026-10-01T00:00&to=2026-10-08T00:00');expect(w.text()).toContain('Declined');expect(w.text()).toContain('20% of ringing');expect(w.text()).not.toContain('not in the support team');({w}=await mountAt(Agent,'/asterisk/team/201'));expect(w.text()).toContain('201 is not in the support team')})
