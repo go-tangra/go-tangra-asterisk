@@ -11,7 +11,7 @@ require (
 	github.com/go-tangra/go-tangra-auth/sdk/v4 v4.1.0
 	github.com/go-tangra/go-tangra-lcm/sdk/v4 v4.1.0
 	github.com/go-tangra/go-tangra-portal/sdk/v4 v4.1.0
-	github.com/go-tangra/go-tangra/v4 v4.6.0
+	github.com/go-tangra/go-tangra/v4 v4.9.2
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/metric v1.46.0
 	golang.org/x/sync v0.23.0
