@@ -85,7 +85,12 @@ All per agent and period (PBX timezone), and for the team.
 **Inbound (group 600)**
 - offered = ring legs created for the agent; answered; declined; colleague
   answered; rang while the call was lost.
-- answer share = answered / team answered.
+- answer share = answered / team answered (ring group calls only).
+- **share** of the team's work = ½ × handled calls / team's handled calls +
+  ½ × talk / team's talk, where handled calls are answered group and direct
+  calls plus connected outbound calls, talk covers all three, and the team is
+  the support team's members (their shares add up to 100 %). Counting both
+  keeps one long call and many short ones from deciding it alone.
 - **time to answer** = agent leg `CHAN_START` → `ANSWER` (median, p90).
 - talk time = CEL `BRIDGE_ENTER` → `BRIDGE_EXIT` on the agent leg; average
   handle time = talk / answered.

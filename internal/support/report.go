@@ -59,7 +59,9 @@ type AgentStat struct {
 	Extension string `json:"extension"`
 	Name      string `json:"name"`
 	Member    bool   `json:"member"` // in the support team
-	Inbound   struct {
+	// Share of the team's work: see workShares.
+	Share   float64 `json:"share"`
+	Inbound struct {
 		Offered           int     `json:"offered"`
 		Answered          int     `json:"answered"`
 		Declined          int     `json:"declined"`
@@ -252,6 +254,7 @@ func Agents(calls []Call, from, to time.Time, window time.Duration, team []strin
 		}
 		out = append(out, a)
 	}
+	workShares(out)
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Inbound.Answered != out[j].Inbound.Answered {
 			return out[i].Inbound.Answered > out[j].Inbound.Answered
@@ -259,6 +262,39 @@ func Agents(calls []Call, from, to time.Time, window time.Duration, team []strin
 		return out[i].Extension < out[j].Extension
 	})
 	return out
+}
+
+// workShares sets each agent's Share of the team's work: half its part of the
+// handled calls (answered group and direct calls, connected outbound calls)
+// and half its part of the talk time, so neither one long call nor many short
+// ones decide it alone. The team is the support team's members, whose shares
+// add up to 1; other extensions are measured against the same totals.
+func workShares(agents []*AgentStat) {
+	handled := func(a *AgentStat) int64 {
+		return int64(a.Inbound.Answered + a.Inbound.DirectAnswered + a.Outbound.Connected)
+	}
+	talk := func(a *AgentStat) int64 { return a.Inbound.Talk + a.Inbound.DirectTalk + a.Outbound.Talk }
+	var calls, secs int64
+	for _, a := range agents {
+		if a.Member {
+			calls += handled(a)
+			secs += talk(a)
+		}
+	}
+	for _, a := range agents {
+		var sum, parts float64
+		if calls > 0 {
+			sum += float64(handled(a)) / float64(calls)
+			parts++
+		}
+		if secs > 0 {
+			sum += float64(talk(a)) / float64(secs)
+			parts++
+		}
+		if parts > 0 {
+			a.Share = sum / parts
+		}
+	}
 }
 
 // LostCalls lists the lost and announcement-abandoned group calls of

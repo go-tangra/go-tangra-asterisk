@@ -574,6 +574,8 @@ export interface components {
             extension: string;
             name: string;
             member: boolean;
+            /** @description Share of the team's work: the mean of the agent's part of the members' handled calls (answered group and direct, connected outbound) and of their talk time. */
+            share: number;
             inbound: {
                 offered: number;
                 answered: number;

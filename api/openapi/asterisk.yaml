@@ -2949,6 +2949,7 @@
           "extension",
           "name",
           "member",
+          "share",
           "inbound",
           "outbound"
         ],
@@ -2961,6 +2962,10 @@
           },
           "member": {
             "type": "boolean"
+          },
+          "share": {
+            "type": "number",
+            "description": "Share of the team's work: the mean of the agent's part of the members' handled calls (answered group and direct, connected outbound) and of their talk time."
           },
           "inbound": {
             "type": "object",
