@@ -5,6 +5,9 @@ import { pbxTimezone } from '@/components/timezone'
 // from the period start to its end (a series that began an hour ago fills only
 // the last hour), and a line breaks where samples are missing for more than
 // two steps. The chart is drawn on a W x H box; the y scale starts at zero.
+// Series the PBX still reports (live) are drawn before ones that went away
+// during the period, so a contact that dropped yesterday does not crowd out
+// the ones registered now.
 export const W=1000,H=200
 // Labels every series carries (the binding and the scrape) say nothing to a reader.
 const HIDDEN=new Set(['__name__','instance','job','pbx_id','tenant_id'])
@@ -35,12 +38,13 @@ function tick(ms:number,span:number,tz:string):string{
 }
 // A nice upper bound for the y axis: 1, 2 or 5 times a power of ten.
 function ceiling(max:number):number{if(max<=0)return 1;const p=10**Math.floor(Math.log10(max));for(const m of [1,2,5,10])if(m*p>=max)return m*p;return 10*p}
-export function buildChart(series:MetricSeries[],from:string,to:string,stepSeconds:number,unit:Unit,fallback:string,limit=8,tz=pbxTimezone.value):Chart{
+export function buildChart(series:MetricSeries[],from:string,to:string,stepSeconds:number,unit:Unit,fallback:string,limit=8,tz=pbxTimezone.value,live?:Set<string>):Chart{
  const x0=Date.parse(from),x1=Date.parse(to),span=Math.max(1,x1-x0),gap=2*stepSeconds*1000
  // Nothing asked yet (or an invalid period): no chart rather than invalid dates.
  if(!series.length||!Number.isFinite(x0)||!Number.isFinite(x1))return {lines:[],hidden:0,max:1,yTicks:[],xTicks:[]}
  const latest=(s:MetricSeries)=>{for(let i=s.samples.length-1;i>=0;i--){const p=s.samples[i];if(p?.hasValue&&p.value!==null)return p.value}return null}
- const ordered=[...series].sort((a,b)=>(latest(b)??-Infinity)-(latest(a)??-Infinity)||seriesName(a.labels,fallback).localeCompare(seriesName(b.labels,fallback)))
+ const gone=(s:MetricSeries)=>live&&!live.has(seriesKey(s.labels))?1:0
+ const ordered=[...series].sort((a,b)=>gone(a)-gone(b)||(latest(b)??-Infinity)-(latest(a)??-Infinity)||seriesName(a.labels,fallback).localeCompare(seriesName(b.labels,fallback)))
  const shown=ordered.slice(0,limit)
  const values=shown.flatMap(s=>s.samples.filter(p=>p.hasValue&&p.value!==null).map(p=>p.value as number))
  const max=unit==='flag'?1:ceiling(Math.max(0,...values))

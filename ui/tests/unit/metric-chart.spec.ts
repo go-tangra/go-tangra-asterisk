@@ -41,3 +41,9 @@ it('formats values by unit',()=>{
  expect(formatValue(null,'count')).toBe('—')
  expect(formatValue(2,'count')).toBe('2')
 })
+it('draws series the PBX still reports before ones that went away',()=>{
+ const t='2026-10-13T06:00:00Z',old={...base,contact:'sip:30@old'},now={...base,contact:'sip:30@new'}
+ const c=buildChart([s(old,[[t,2000]]),s(now,[[t,80]])],'2026-10-13T05:00:00Z','2026-10-13T07:00:00Z',60,'ms','x',1,'UTC',new Set([JSON.stringify(Object.entries(now).sort(([a],[b])=>a.localeCompare(b)))]))
+ expect(c.lines.map(l=>l.name)).toEqual(['contact sip:30@new'])
+ expect(c.hidden).toBe(1)
+})
