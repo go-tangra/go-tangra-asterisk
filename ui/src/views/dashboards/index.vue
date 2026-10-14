@@ -29,7 +29,7 @@ async function load(){
  }catch(e){if(!signal.aborted)error.value=explain(e)}finally{if(!signal.aborted)loading.value=false}
 }
 onMounted(async()=>{try{directory.value=(await get<{items:{extension:string;name:string}[]}>('/api/asterisk/directory/extensions')).items.map(e=>({title:e.extension+' '+e.name,value:e.extension}))}catch(e){error.value=explain(e)};await load()})
-const chart=computed(()=>buildChart(range.value,asked.value.from,asked.value.to,asked.value.step,selected.value.unit,selected.value.title))
+const chart=computed(()=>buildChart(range.value,asked.value.from,asked.value.to,asked.value.step,selected.value.unit,selected.value.title,8,undefined,new Set(instant.value.map(i=>seriesKey(i.labels)))))
 const current=(key:string)=>instant.value.find(i=>seriesKey(i.labels)===key)?.samples[0]?.value
 const STROKES=['stroke-primary','stroke-secondary','stroke-accent','stroke-info','stroke-warning','stroke-error','stroke-success','stroke-base-content']
 const FILLS=['fill-primary','fill-secondary','fill-accent','fill-info','fill-warning','fill-error','fill-success','fill-base-content']
@@ -38,7 +38,7 @@ const dot=(path:string)=>{const [x,y]=path.split(',').map(Number);return {x:x??0
 // Every series' current value, for metrics with more series than the chart draws.
 const table=computed(()=>instant.value.map(s=>({key:seriesKey(s.labels),name:seriesName(s.labels,selected.value.title),value:s.samples[0]?.value})).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})))
 </script>
-<template><UiPage title="PBX monitoring"><template #filters><PeriodFilter v-model:from="from" v-model:to="to" @update:from="quick=null" @update:to="quick=null"><UiSelect id="metric" v-model="metric" label="Metric" :clearable="false" :options="metrics" @update:model-value="load"/><UiSelect id="monitor-extension" v-model="extension" label="Extension" :options="directory" @update:model-value="load"/><template #actions><div class="join"><UiButton v-for="r in ranges" :key="r.hours" class="join-item" :variant="quick===r.hours?'solid':'soft'" :data-test="'range-'+r.hours" @click="useRange(r.hours)">{{r.title}}</UiButton></div><UiButton :disabled="loading" @click="load">Refresh</UiButton></template></PeriodFilter></template>
+<template><UiPage title="PBX monitoring"><template #filters><PeriodFilter v-model:from="from" v-model:to="to" @update:from="quick=null" @update:to="quick=null"><UiSelect id="metric" v-model="metric" label="Metric" :clearable="false" :options="metrics" @update:model-value="load"/><UiSelect id="monitor-extension" v-model="extension" label="Extension" :options="directory" @update:model-value="load"/><div class="join" role="group" aria-label="Quick range"><UiButton v-for="r in ranges" :key="r.hours" class="join-item" :variant="quick===r.hours?'solid':'soft'" :data-test="'range-'+r.hours" @click="useRange(r.hours)">{{r.title}}</UiButton></div><template #actions><UiButton :disabled="loading" @click="load">Refresh</UiButton></template></PeriodFilter></template>
 <UiAlert v-if="error" kind="warning">{{error}}</UiAlert>
 <UiCard v-else :title="selected.title">
  <p v-if="!chart.lines.length" class="text-sm text-base-content/60" data-test="chart-empty">No samples in this period.</p>
@@ -53,10 +53,10 @@ const table=computed(()=>instant.value.map(s=>({key:seriesKey(s.labels),name:ser
    <div class="mt-1 flex justify-between text-xs text-base-content/60 tabular-nums" data-test="time-axis"><span v-for="t in chart.xTicks" :key="t.x">{{t.label}}</span></div>
   </div>
   <ul class="flex flex-wrap gap-x-5 gap-y-1 text-sm" data-test="legend">
-   <li v-for="(l,i) in chart.lines" :key="l.key" class="flex items-center gap-2"><span class="inline-block size-2.5 rounded-full" :class="SWATCHES[i%SWATCHES.length]"/><span>{{l.name}}</span><span class="font-semibold tabular-nums">{{formatValue(current(l.key)??l.latest,selected.unit)}}</span></li>
+   <li v-for="(l,i) in chart.lines" :key="l.key" class="flex items-center gap-2"><span class="inline-block size-2.5 rounded-full" :class="SWATCHES[i%SWATCHES.length]"/><span>{{l.name}}</span><span class="font-semibold tabular-nums">{{formatValue(current(l.key),selected.unit)}}</span></li>
   </ul>
   <p v-if="chart.hidden" class="text-sm text-base-content/60">{{chart.hidden}} more series are not drawn. Pick an extension to narrow the chart; every current value is listed below.</p>
  </div>
 </UiCard>
-<UiCard v-if="!error && chart.hidden" title="Current values"><div class="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-x-6 gap-y-1 text-sm" data-test="current-values"><div v-for="r in table" :key="r.key" class="flex justify-between gap-2"><span class="truncate">{{r.name}}</span><span class="font-semibold tabular-nums">{{formatValue(r.value,selected.unit)}}</span></div></div></UiCard>
+<UiCard v-if="!error && chart.hidden" title="Current values"><div class="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-x-6 gap-y-1 text-sm" data-test="current-values"><div v-for="r in table" :key="r.key" class="flex justify-between gap-2"><span class="truncate" :title="r.name">{{r.name}}</span><span class="shrink-0 whitespace-nowrap font-semibold tabular-nums">{{formatValue(r.value,selected.unit)}}</span></div></div></UiCard>
 </UiPage></template>
