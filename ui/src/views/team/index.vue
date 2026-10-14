@@ -26,7 +26,8 @@ const rows=useRowActivation<SupportAgent>(a=>a.extension,a=>'Open agent '+a.exte
 const columns:Column<SupportAgent>[]=[
  {key:'extension',label:'Agent'},
  {key:'answered',label:'Answered',align:'end',format:a=>String(a.inbound.answered)},
- {key:'share',label:'Share',align:'end',format:a=>(a.inbound.answerShare*100).toFixed(0)+'%'},
+ {key:'share',label:'Share',align:'end',format:a=>(a.share*100).toFixed(0)+'%'},
+ {key:'answerShare',label:'Answer share',align:'end',format:a=>(a.inbound.answerShare*100).toFixed(0)+'%',hideOnStack:true},
  {key:'declined',label:'Declined',align:'end',format:a=>String(a.inbound.declined)},
  {key:'pickup',label:'Time to answer',align:'end',format:a=>spreadText(a.inbound.timeToAnswerSeconds),hideOnStack:true},
  {key:'talk',label:'Inbound talk',align:'end',format:a=>seconds(a.inbound.talkSeconds)},
