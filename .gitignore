@@ -16,3 +16,4 @@ ui/test-results/
 ui/playwright-report/
 dist/
 deploy/bundle/packages.sha256
+/asterisk-catalogue-permissions
