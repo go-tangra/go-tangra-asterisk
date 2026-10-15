@@ -23,7 +23,7 @@ func TestSearch(t *testing.T) {
 	d := func(s int64) *int64 { return &s }
 	from := time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)
 	calls := []Call{
-		{LinkedID: "a", Start: from.Add(time.Hour), Kind: KindInboundGroup, Outcome: OutcomeAnswered, Agent: "49", Caller: "0888123456", Talk: d(400), Recorded: true, Legs: []AgentLeg{{Extension: "49"}, {Extension: "41"}}},
+		{LinkedID: "a", Start: from.Add(time.Hour), Kind: KindInboundGroup, Outcome: OutcomeAnswered, Agent: "49", Caller: "0888123456", Talk: d(400), Recorded: true, Legs: []AgentLeg{{Extension: "49", Outcome: LegAnswered}, {Extension: "41"}}},
 		{LinkedID: "b", Start: from.Add(2 * time.Hour), Kind: KindInboundGroup, Outcome: OutcomeLost, LostReason: LostCallerLeft, Caller: "0899000000", Legs: []AgentLeg{{Extension: "41"}}},
 		{LinkedID: "c", Start: from.Add(3 * time.Hour), Kind: KindOutbound, Outcome: OutcomeConnected, Agent: "41", Caller: "+359888123456", Talk: d(30)},
 		{LinkedID: "d", Start: from.Add(4 * time.Hour), Kind: KindInternal, Agent: "41"},
@@ -41,8 +41,8 @@ func TestSearch(t *testing.T) {
 		want string
 	}{
 		"all support calls, newest first": {Filter{}, "cba"},
-		"agent took, dialled or rang":     {Filter{Agent: "41"}, "cba"},
-		"agent 49":                        {Filter{Agent: "49"}, "a"},
+		"agent took or dialled, not rang": {Filter{Agent: "41"}, "c"},
+		"agent who answered a leg":        {Filter{Agent: "49"}, "a"},
 		"lost only":                       {Filter{Type: TypeLost}, "b"},
 		"caller digits in any format":     {Filter{Caller: "888 123"}, "ca"},
 		"at least five minutes":           {Filter{MinTalk: 300}, "a"},
