@@ -99,10 +99,12 @@ func Search(calls []Call, from, to time.Time, f Filter) []Row {
 			continue
 		}
 		r := Row{LinkedID: c.LinkedID, Start: c.Start, Type: t, Kind: c.Kind, Outcome: c.Outcome, LostReason: c.LostReason, Agent: c.Agent, Caller: c.Caller, Wait: c.CallerWait, Talk: c.Talk, Recorded: c.Recorded, Quality: Grade(c.Quality), QualitySide: c.QualitySide, Rang: []string{}}
+		// The agent's calls are those they took or dialled. Ringing alone
+		// does not count: a group call rings every member of the group.
 		involved := f.Agent == "" || c.Agent == f.Agent
 		for _, l := range c.Legs {
 			r.Rang = append(r.Rang, l.Extension)
-			involved = involved || l.Extension == f.Agent
+			involved = involved || (l.Extension == f.Agent && l.Outcome == LegAnswered)
 		}
 		switch {
 		case !involved,

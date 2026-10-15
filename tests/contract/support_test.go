@@ -88,7 +88,7 @@ func TestSupportCallSearch(t *testing.T) {
 		Items []support.Row `json:"items"`
 		Total int           `json:"total"`
 	}
-	if json.Unmarshal(w.Body.Bytes(), &page) != nil || page.Total != 2 || page.Items[0].LinkedID != "c" || page.Items[1].Type != support.TypeAnswered {
-		t.Fatalf("41 dialled c and declined a: %s", w.Body)
+	if json.Unmarshal(w.Body.Bytes(), &page) != nil || page.Total != 1 || page.Items[0].LinkedID != "c" {
+		t.Fatalf("41 dialled c; declining a does not make it 41's call: %s", w.Body)
 	}
 }
